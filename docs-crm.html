@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard CRM · Visão Executiva</title>
+<style>
+:root{
+  --bg:#fafbfc; --card:#fff; --border:#e6eaf0; --text:#0f1b2d; --muted:#6b7785;
+  --primary:#2563eb; --success:#10b981; --warning:#f59e0b; --danger:#ef4444;
+  --shadow:0 1px 3px rgba(15,27,45,.06),0 1px 2px rgba(15,27,45,.04);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.65}
+.wrap{max-width:1100px;margin:0 auto;padding:0 32px}
+header.hero{background:linear-gradient(135deg,#0f172a,#1e3a8a);color:#fff;padding:56px 0 48px}
+header.hero .wrap{display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.hero-tag{display:inline-block;padding:4px 12px;background:rgba(255,255,255,.15);border-radius:20px;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:12px}
+.hero-title{font-size:36px;font-weight:800;letter-spacing:-.8px;margin-bottom:8px;line-height:1.15}
+.hero-sub{font-size:16px;color:rgba(255,255,255,.85);max-width:560px}
+.hero-cta{display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--primary);padding:11px 18px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;border:none;cursor:pointer;transition:transform .15s, box-shadow .15s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(0,0,0,.18)}
+.btn-ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4)}
+.btn-ghost:hover{background:rgba(255,255,255,.08)}
+nav.toc{position:sticky;top:0;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);z-index:10}
+nav.toc .wrap{display:flex;gap:6px;overflow-x:auto;padding:10px 32px}
+nav.toc a{color:var(--muted);text-decoration:none;font-size:13px;font-weight:500;padding:8px 12px;border-radius:6px;white-space:nowrap;transition:.15s}
+nav.toc a:hover{background:#eef4ff;color:var(--primary)}
+section.section{padding:48px 0;border-bottom:1px solid var(--border)}
+section.section:last-of-type{border-bottom:none}
+h2{font-size:24px;font-weight:700;margin-bottom:6px;letter-spacing:-.3px}
+.section-sub{color:var(--muted);font-size:14px;margin-bottom:24px}
+h3{font-size:17px;font-weight:700;margin:24px 0 10px}
+p{margin-bottom:12px}
+ul{margin-left:20px;margin-bottom:12px}
+ul li{margin-bottom:6px}
+.grid{display:grid;gap:14px}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:900px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;box-shadow:var(--shadow)}
+.card h4{font-size:14px;font-weight:700;margin-bottom:6px;color:var(--text)}
+.card p{font-size:13px;color:var(--muted);margin:0}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;box-shadow:var(--shadow);text-align:left}
+.kpi-card .num{font-size:28px;font-weight:800;color:var(--primary);letter-spacing:-.5px}
+.kpi-card .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600;letter-spacing:.5px;margin-top:4px}
+.tag{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;letter-spacing:.3px}
+.tag-blue{background:#dbeafe;color:#1e40af}
+.tag-green{background:#d1fae5;color:#047857}
+.tag-yellow{background:#fef3c7;color:#92400e}
+.tag-red{background:#fee2e2;color:#991b1b}
+.tag-gray{background:#f1f4f8;color:#4b5563}
+.callout{background:#eff6ff;border-left:4px solid var(--primary);padding:14px 18px;border-radius:6px;margin:14px 0}
+.callout.warn{background:#fffbeb;border-left-color:var(--warning)}
+.callout.danger{background:#fef2f2;border-left-color:var(--danger)}
+.callout.ok{background:#f0fdf4;border-left-color:var(--success)}
+.callout strong{display:block;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:var(--shadow);margin:14px 0}
+th{background:#f4f7fb;text-align:left;padding:12px 14px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;border-bottom:1px solid var(--border)}
+td{padding:11px 14px;border-bottom:1px solid #f1f4f8;vertical-align:top}
+tr:last-child td{border-bottom:none}
+.flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0}
+.flow-step{background:var(--card);border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;box-shadow:var(--shadow)}
+.flow-arrow{color:var(--muted);font-size:18px}
+footer{padding:32px 0;text-align:center;color:var(--muted);font-size:12px}
+code{background:#f1f4f8;padding:2px 6px;border-radius:4px;font-family:'SF Mono',Monaco,Consolas,monospace;font-size:12.5px;color:#1e40af}
+.timeline{position:relative;padding-left:24px;margin-top:12px}
+.timeline::before{content:'';position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:#e6eaf0}
+.timeline-item{position:relative;padding-bottom:18px}
+.timeline-item::before{content:'';position:absolute;left:-22px;top:4px;width:14px;height:14px;background:var(--primary);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 1px var(--border)}
+.timeline-item h4{font-size:14px;margin-bottom:4px}
+.timeline-item p{font-size:13px;color:var(--muted);margin:0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <span class="hero-tag">Documento interno · V1</span>
+      <h1 class="hero-title">Dashboard CRM<br>Visão Executiva</h1>
+      <p class="hero-sub">Um único local confiável para acompanhar diariamente a receita de CRM, identificar quais ativos puxam o resultado e onde precisamos otimizar.</p>
+    </div>
+    <div class="hero-cta">
+      <a class="btn" href="dashboard-crm.html" target="_blank">Abrir dashboard interativo →</a>
+      <a class="btn btn-ghost" href="#proximos-passos">Próximos passos</a>
+    </div>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="wrap">
+    <a href="#contexto">Contexto</a>
+    <a href="#entrega">O que foi entregue</a>
+    <a href="#estrutura">Estrutura do dashboard</a>
+    <a href="#decisoes">Decisões críticas</a>
+    <a href="#metricas">Métricas-chave</a>
+    <a href="#escopo">Fora do escopo V1</a>
+    <a href="#arquitetura">Arquitetura de dados</a>
+    <a href="#proximos-passos">Próximos passos</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<section class="section" id="contexto">
+  <h2>Contexto e Objetivo</h2>
+  <p class="section-sub">Por que esse dashboard existe e qual problema ele resolve.</p>
+
+  <div class="callout">
+    <strong>Dor principal hoje</strong>
+    Temos muitos ativos de CRM (fluxos de e-mail, fluxos de WhatsApp, campanhas, comunidade) mas <strong>não conseguimos saber, com confiança, quais estão puxando a receita</strong> e quais precisam de ajuste. As bases de dados estão isoladas e ninguém olha o mesmo número.
+  </div>
+
+  <h3>O que esse dashboard precisa entregar</h3>
+  <ul>
+    <li><strong>Local único e confiável</strong> de acompanhamento de receita CRM, com leitura diária pela operação e leitura mensal pela gestão.</li>
+    <li><strong>Identificação acionável</strong> de quais ativos performam (e quais não) — para decisões de otimização baseadas em dado, não em intuição.</li>
+    <li><strong>Padronização das métricas</strong> entre canais (mesmo funil, mesmas fórmulas, mesma atribuição) para que a comparação entre canais faça sentido.</li>
+  </ul>
+</section>
+
+<section class="section" id="entrega">
+  <h2>O que foi entregue nesta fase</h2>
+  <p class="section-sub">Front-end completo, navegável, com dados mockados realistas. Pronto para validação e para integrar com o back-end na próxima fase.</p>
+
+  <div class="grid grid-4">
+    <div class="kpi-card"><div class="num">6</div><div class="lbl">Páginas navegáveis</div></div>
+    <div class="kpi-card"><div class="num">5</div><div class="lbl">Filtros globais</div></div>
+    <div class="kpi-card"><div class="num">40+</div><div class="lbl">Métricas mapeadas</div></div>
+    <div class="kpi-card"><div class="num">~100%</div><div class="lbl">Cobertura dos ativos CRM</div></div>
+  </div>
+
+  <h3>Entregáveis</h3>
+  <div class="grid grid-2" style="margin-top:8px">
+    <div class="card">
+      <h4>1. Dashboard interativo (HTML)</h4>
+      <p>Arquivo único <code>dashboard-crm.html</code> com 6 páginas, filtros, gráficos e tabelas com drill-down. Roda em qualquer navegador.</p>
+    </div>
+    <div class="card">
+      <h4>2. Planilha de mapeamento de dados</h4>
+      <p>Arquivo <code>Métricas Gerenciamento v2.xlsx</code> documenta cada métrica do dashboard: origem, fórmula, granularidade e objetivo. Base para construção do back-end.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="estrutura">
+  <h2>Estrutura do Dashboard</h2>
+  <p class="section-sub">Uma página de visão executiva + uma por canal CRM.</p>
+
+  <table>
+    <thead><tr><th>Página</th><th>Público</th><th>Conteúdo principal</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Resumo CRM</strong></td><td>Gestão + operação (abertura diária)</td><td>KPIs topline · Receita 1ª compra vs Recompra · Faturamento por canal · Eficiência por canal · Captação de leads · Formulários e Popups · Funil · Pace · Saúde da Base (e-mail)</td></tr>
+      <tr><td><strong>E-mail Fluxo</strong></td><td>Operação CRM</td><td>KPIs do canal · Funil · Receita/Inscrito diário · Métricas Klaviyo · Saúde da Base · Detalhamento por fluxo (clique para abrir cada e-mail) · Rankings</td></tr>
+      <tr><td><strong>E-mail Campanha</strong></td><td>Operação CRM</td><td>KPIs · Funil · Receita/Disparo diário · Métricas Klaviyo · Saúde da Base · Tabela por campanha · Rankings</td></tr>
+      <tr><td><strong>WhatsApp Fluxo</strong></td><td>Operação CRM</td><td>KPIs · Funil · Receita/Inscrito diário · Métricas Vekta+n8n (resposta, destrava, handoff, retenção IA) · Detalhamento por fluxo (clique para abrir cada template) · Rankings</td></tr>
+      <tr><td><strong>WhatsApp Campanha</strong></td><td>Operação CRM</td><td>KPIs · Funil · Receita/Disparo diário · Métricas Vekta · Detalhamento por campanha (clique para template) · Rankings</td></tr>
+      <tr><td><strong>Comunidade WhatsApp</strong></td><td>Operação CRM</td><td>KPIs · Funil · Receita/Disparo diário · Participantes/Entradas/Saídas · Lista de mensagens · Rankings</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Filtros globais (todas as páginas)</h3>
+  <p>
+    <span class="tag tag-blue">Período</span>
+    <span class="tag tag-blue">Comparativo (dia/mês)</span>
+    <span class="tag tag-blue">Canal</span>
+    <span class="tag tag-blue">Tipo de Cliente (1ª/Recompra)</span>
+    <span class="tag tag-blue">Fluxo/Campanha</span>
+  </p>
+</section>
+
+<section class="section" id="decisoes">
+  <h2>Decisões críticas tomadas</h2>
+  <p class="section-sub">Correções de definição e padronização que precisamos respeitar daqui em diante.</p>
+
+  <h3>Fórmulas corrigidas</h3>
+  <table>
+    <thead><tr><th>Métrica</th><th>Antes</th><th>Agora</th></tr></thead>
+    <tbody>
+      <tr><td><strong>RPS</strong></td><td>TKM / Conversão <span class="tag tag-red">errado</span></td><td>TKM × Conversão (= Faturamento / Sessões) <span class="tag tag-green">correto</span></td></tr>
+      <tr><td><strong>CTR dos E-mails</strong></td><td>Cliques / Abertos (chamado de "CTR")</td><td>Renomeado para <strong>CTOR</strong> (Click-to-Open Rate)</td></tr>
+      <tr><td><strong>Retenção da IA</strong></td><td>Nome confuso (não é retenção)</td><td>Definição mantida; agora documentado como Taxa de Handoff IA→Comercial</td></tr>
+      <tr><td><strong>Funil entre canais</strong></td><td>Etapas inconsistentes</td><td>Padronizado: Sessões → ATC → BCO → Compras em todos os 5 canais</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Atribuição</h3>
+  <div class="callout ok">
+    <strong>Modelo: Last-Click via UTM</strong>
+    A receita de cada canal é atribuída pelo último canal clicado antes da compra. A soma dos 5 canais CRM = Receita CRM Total (sem double-count).
+  </div>
+
+  <h3>KPIs principais por canal</h3>
+  <table>
+    <thead><tr><th>Canal</th><th>KPI principal de eficiência</th><th>Métrica de ranking</th></tr></thead>
+    <tbody>
+      <tr><td>E-mail Fluxo</td><td>Receita / Inscrito</td><td>Receita / Inscrito</td></tr>
+      <tr><td>E-mail Campanha</td><td>Receita / Disparo</td><td>Receita / Disparo</td></tr>
+      <tr><td>WhatsApp Fluxo</td><td>Receita / Inscrito</td><td>Receita / Inscrito</td></tr>
+      <tr><td>WhatsApp Campanha</td><td>Receita / Disparo</td><td>Receita / Disparo</td></tr>
+      <tr><td>Comunidade WhatsApp</td><td>Receita / Disparo</td><td>Receita / Disparo</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="section" id="metricas">
+  <h2>Métricas-chave por bloco</h2>
+  <p class="section-sub">Resumo do que é medido. Detalhamento completo na planilha <code>Métricas Gerenciamento v2.xlsx</code>.</p>
+
+  <div class="grid grid-3">
+    <div class="card">
+      <h4>Topline (Resumo)</h4>
+      <p>Faturamento CRM · Compras · TKM · RPS · Conversão Geral · Δ vs dia e vs mês</p>
+    </div>
+    <div class="card">
+      <h4>Segmentação 1ª vs Recompra</h4>
+      <p>Receita 1ª Compra · Receita Recompra · Meta de cada · Receita Total CRM (MTD)</p>
+    </div>
+    <div class="card">
+      <h4>Eficiência por canal</h4>
+      <p>Sessões · Conversão · Ticket Médio · RPS — comparados entre canais e ao longo de 30 dias</p>
+    </div>
+    <div class="card">
+      <h4>Captação de leads</h4>
+      <p>Leads novos por dia · Taxa de Cadastro · Performance dos formulários e popups (Klaviyo Forms)</p>
+    </div>
+    <div class="card">
+      <h4>Funil CRM</h4>
+      <p>Sessões → ATC → BCO → Compras · Taxas entre etapas · Conversão Geral</p>
+    </div>
+    <div class="card">
+      <h4>Saúde da Base (e-mail)</h4>
+      <p>Taxa de Entrega · Bounce · Spam · Opt-out · Base Ativa 90d</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="escopo">
+  <h2>Fora do escopo do V1</h2>
+  <p class="section-sub">Decisões conscientes para entregar valor agora e iterar depois.</p>
+
+  <table>
+    <thead><tr><th>Item</th><th>Status</th><th>Motivo</th></tr></thead>
+    <tbody>
+      <tr><td>CAC / LTV / ROAS por canal</td><td><span class="tag tag-yellow">Fase 2</span></td><td>Próxima página dedicada quando custos por canal estiverem mapeados</td></tr>
+      <tr><td>Saúde da Base · WhatsApp</td><td><span class="tag tag-yellow">Fase 2</span></td><td>Depende de acesso à Meta Business Manager (Quality Rating, delivery, blocks)</td></tr>
+      <tr><td>Recompra / Coorte / Tempo entre compras</td><td><span class="tag tag-gray">Posterior</span></td><td>Métricas de retenção de cliente — não é a dor principal agora</td></tr>
+      <tr><td>Qualidade de lead comercial / Tempo de ciclo</td><td><span class="tag tag-gray">Posterior</span></td><td>O foco hoje é receita CRM, não fechamento comercial</td></tr>
+      <tr><td>Aba "Sem Atribuição" (UTMs órfãs)</td><td><span class="tag tag-yellow">Próximo passo</span></td><td>Quando surgir UTM fora do padrão, o dashboard precisa pedir classificação manual</td></tr>
+      <tr><td>Engajamento da Comunidade</td><td><span class="tag tag-gray">Não planejado</span></td><td>Sendflow não expõe dados de engajamento granular e não é prioridade</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="section" id="arquitetura">
+  <h2>Arquitetura de dados</h2>
+  <p class="section-sub">Cada base hoje está isolada. A próxima fase é centralizar tudo no Supabase.</p>
+
+  <div class="flow">
+    <div class="flow-step">Klaviyo</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">Shopify</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">Vekta + n8n</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">Sendflow</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">Looker (GA4)</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step" style="background:#dbeafe;border-color:#93c5fd;color:#1e40af"><strong>Supabase</strong> (a construir)</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step" style="background:#0f172a;color:#fff;border-color:#0f172a"><strong>Dashboard</strong></div>
+  </div>
+
+  <h3>Fontes por canal</h3>
+  <table>
+    <thead><tr><th>Canal</th><th>Fontes de dados</th></tr></thead>
+    <tbody>
+      <tr><td>E-mail Fluxo</td><td>Klaviyo (envios, abertos, cliques, base) · Shopify (compras, faturamento) · Looker GA4 (sessões, funil)</td></tr>
+      <tr><td>E-mail Campanha</td><td>Klaviyo · Shopify · Looker GA4</td></tr>
+      <tr><td>WhatsApp Fluxo</td><td>Vekta + n8n · Hubspot (inscritos, hoje) → Klaviyo (após migração) · Shopify · Looker GA4</td></tr>
+      <tr><td>WhatsApp Campanha</td><td>Vekta (migração de Spread em andamento) · Shopify · Looker GA4</td></tr>
+      <tr><td>Comunidade WhatsApp</td><td>Sendflow · Shopify · Looker GA4</td></tr>
+      <tr><td>Captação de leads / Forms / Popups</td><td>Klaviyo Forms (todas as Landing Pages estão na Shopify)</td></tr>
+      <tr><td>Atribuição</td><td>UTM padronizada → Looker → cruzamento com Shopify no Supabase</td></tr>
+      <tr><td>Tipo de Cliente (1ª/Recompra)</td><td>Shopify (<code>customer.orders_count</code>)</td></tr>
+      <tr><td>Metas mensais</td><td>Input manual (planilha de metas → Supabase)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="section" id="proximos-passos">
+  <h2>Próximos passos</h2>
+  <p class="section-sub">Sequência sugerida para sair do front-end mockado para produção.</p>
+
+  <div class="timeline">
+    <div class="timeline-item">
+      <h4>1 · Validar o front-end com o time</h4>
+      <p>Compartilhar este dashboard com gestão e operação. Coletar feedback de UX e métricas antes de gastar engenharia no back-end.</p>
+    </div>
+    <div class="timeline-item">
+      <h4>2 · Modelar o schema do Supabase</h4>
+      <p>Criar tabelas espelhando a planilha de mapeamento. Definir granularidade (dia · canal · fluxo · peça) e chaves de UTM.</p>
+    </div>
+    <div class="timeline-item">
+      <h4>3 · Conectar fontes via API/integrações</h4>
+      <p>Klaviyo API · Shopify API · Vekta + n8n (já tem pipeline) · Sendflow · Looker (GA4). ETL diário para a base centralizada.</p>
+    </div>
+    <div class="timeline-item">
+      <h4>4 · Padronizar UTMs e implementar atribuição last-click</h4>
+      <p>Auditar todos os ativos para garantir UTM padrão. Criar processo para quando aparecer UTM fora do padrão (aba "Sem Atribuição").</p>
+    </div>
+    <div class="timeline-item">
+      <h4>5 · Substituir mockados por dados reais</h4>
+      <p>Trocar os mocks do <code>dashboard-crm.html</code> por chamadas ao Supabase. Validar consistência (soma dos 5 canais = Shopify CRM total).</p>
+    </div>
+    <div class="timeline-item">
+      <h4>6 · Fase 2 — CAC / LTV / ROAS</h4>
+      <p>Nova página com custos por canal, retorno e visão de margem CRM.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  Dashboard CRM · Minimal Club · Documento gerado por Daniel Magalhães
+</footer>
+
+</body>
+</html>
