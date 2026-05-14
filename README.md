@@ -1,114 +1,102 @@
 # Dashboard CRM · Minimal Club
 
-Pasta de entrega do projeto **Dashboard CRM V1**. Front-end concluído (mockado), documentação executiva pronta para revisão com gestão e mapeamento técnico das fontes de dados para a próxima fase (back-end no Supabase).
+Dashboard unificado de CRM que consolida métricas dos 5 canais de marketing da Minimal Club (e-mail fluxo, e-mail campanha, WhatsApp fluxo, WhatsApp campanha e comunidade WhatsApp) em uma única tela, com dados reais atualizados automaticamente.
 
 ---
 
-## 📁 Conteúdo da pasta
+## Estado atual do projeto
 
-| Arquivo | Para que serve | Quem usa |
+| Fase | O que é | Status |
 |---|---|---|
-| `dashboard-crm.html` | Dashboard interativo, navegável, com dados mockados realistas. Roda em qualquer navegador, offline, sem dependência. | Gestão + operação CRM |
-| `docs-crm.html` | Documento executivo da entrega — contexto, decisões, métricas, arquitetura e próximos passos. Tem botão pra abrir o dashboard. | Gestor (apresentação) |
-| `Métricas Gerenciamento v2.xlsx` | Mapeamento técnico de todas as métricas do dashboard: nome, tipo (dado/função), fórmula, granularidade, fonte de dados e objetivo. Base para construção do back-end. | Time de dados / engenharia |
-| `Métricas Gerenciamento - original.xlsx` | Versão original enviada antes da análise. Mantida para referência histórica. | Histórico |
-| `build_planilha.py` | Script Python que gera o `Métricas Gerenciamento v2.xlsx`. Permite reproduzir/editar a planilha programaticamente. | Time de dados |
+| **Fase 1 — Frontend** | Dashboard interativo com 6 páginas e 40+ métricas (dados mockados) | ✅ Entregue e aprovado |
+| **Fase 2 — Backend** | Base de dados Supabase + scripts de ingestão das fontes reais | 🔧 Em construção |
+| **Fase 3 — Integração** | Substituição dos dados mock pelos dados reais no dashboard | ⏳ Pendente |
 
 ---
 
-## 🎯 O que esse projeto resolve
+## O que o sistema faz (quando completo)
 
-**Dor:** múltiplos ativos de CRM (e-mail, WhatsApp, comunidade) sem visibilidade unificada de quais puxam receita e quais precisam de ajuste. Bases isoladas, sem padronização.
+Scripts Python rodam a cada 30 minutos e puxam dados do Shopify, Klaviyo, Vekta, Sendflow e Google Sheets (sessões via BigQuery) para um banco centralizado no Supabase. O dashboard HTML lê esses dados via API e exibe KPIs de receita, funil, captação de leads e saúde da base — com filtros por período, canal, tipo de cliente e ativo.
 
-**Solução V1:** dashboard único, leitura diária, com 6 páginas (1 resumo + 5 canais), 40+ métricas padronizadas, filtros globais e drill-down nos ativos.
-
----
-
-## 🧱 Estrutura do dashboard
-
-**Página 1 — Resumo CRM**
-KPIs Topline · Receita 1ª Compra vs Recompra · Faturamento por canal · Eficiência por canal (Sessões, Conversão, TKM, RPS) · Evolução temporal · Captação de Leads · Formulários e Popups · Funil CRM · Pace do mês · Saúde da Base (e-mail).
-
-**Páginas 2 a 6 — Por canal**
-E-mail Fluxo · E-mail Campanha · WhatsApp Fluxo · WhatsApp Campanha · Comunidade WhatsApp.
-Cada uma com: KPIs do canal · Funil · Receita/Inscrito ou /Disparo diário · Métricas específicas · Saúde da Base (quando aplicável) · Detalhamento por ativo (com drill-down) · Rankings.
-
-**Filtros globais:** Período · Comparativo (dia/mês) · Canal · Tipo de Cliente (1ª/Recompra) · Fluxo/Campanha.
+Toda receita é atribuída por **last-click via UTM**: o canal do último link clicado antes da compra recebe 100% do crédito.
 
 ---
 
-## ✅ Decisões críticas tomadas
+## Arquivos do projeto
 
-| Métrica | Antes | Agora |
+### Documentação de produto
+| Arquivo | Para que serve |
+|---|---|
+| `PRODUCT.md` | Fonte de verdade do domínio — glossário, entidades, fluxos, KPIs, escopo |
+| `CLAUDE.md` | Manual de operação do agente — stack, regras, padrões de código |
+| `ARCHITECTURE.md` | Mapa vivo do sistema — módulos, modelo de dados, decisões arquiteturais |
+
+### Frontend (entregue)
+| Arquivo | Para que serve |
+|---|---|
+| `dashboard-crm.html` | Dashboard interativo com dados mockados — abre direto no navegador |
+| `docs-crm.html` | Documento executivo da entrega V1 |
+
+### Backend (em construção)
+| Pasta | Para que serve |
+|---|---|
+| `ingestion/sources/` | Scripts Python — um por fonte de dados (Shopify, Klaviyo, Vekta, Sendflow, Sheets) |
+| `ingestion/models/` | Modelos Pydantic para validação dos dados de cada fonte |
+| `ingestion/db/` | Cliente Supabase e funções de upsert nas tabelas fact_* |
+| `supabase/migrations/` | SQL versionado — schema de tabelas, views e RLS |
+
+### Referência e workflow
+| Pasta | Para que serve |
+|---|---|
+| `docs/specs/` | Spec de cada feature antes de implementar |
+| `docs/decisions/` | Decisões arquiteturais (ADRs) |
+| `docs/sessions/` | Log de cada sessão de desenvolvimento |
+| `prompts/` | Prompts prontos para conduzir sessões com o agente |
+| `templates/` | Templates de documentos (PRODUCT, CLAUDE, ARCHITECTURE, spec, session) |
+| `principios/` | Princípios de clean code, prompt engineering e context engineering |
+
+---
+
+## Fontes de dados
+
+| Canal | Fonte | Frequência |
 |---|---|---|
-| RPS | TKM / Conversão (errado) | TKM × Conversão = Faturamento/Sessões |
-| CTR dos E-mails | Cliques/Abertos | Renomeado para **CTOR** |
-| Funil entre canais | Etapas inconsistentes | Padronizado: Sessões → ATC → BCO → Compras nos 5 canais |
-| Atribuição | Não definida | **Last-click via UTM** (soma dos 5 canais = Receita CRM total) |
-
-**KPI principal por canal:**
-- E-mail Fluxo → Receita / Inscrito
-- E-mail Campanha → Receita / Disparo
-- WhatsApp Fluxo → Receita / Inscrito
-- WhatsApp Campanha → Receita / Disparo
-- Comunidade WhatsApp → Receita / Disparo
+| E-mail Fluxo e Campanha | Klaviyo API | 30 min |
+| WhatsApp Fluxo e Campanha | Vekta API | 30 min |
+| WhatsApp Comunidade | Sendflow API | 30 min |
+| Pedidos e receita | Shopify Admin API | 30 min |
+| Sessões, ATC, BCO | BigQuery → Google Sheets | 1 hora |
+| Metas mensais | Input manual (Supabase) | 1x por mês |
 
 ---
 
-## 🔌 Fontes de dados (para próxima fase)
+## Para começar (Fase 2)
 
-Arquitetura alvo: **Supabase** como base centralizada, consolidando:
+```bash
+# 1. Instalar dependências Python
+pip install -r requirements.txt
 
-- **Shopify** — compras, faturamento, customer.orders_count (1ª vs recompra)
-- **Klaviyo** — e-mail (envios, abertos, cliques, base), Klaviyo Forms (popups e formulários), API para saúde da base
-- **Vekta + n8n** — WhatsApp (disparos, respostas, destravar objeção, handoff IA→comercial)
-- **Hubspot** → **Klaviyo** (migração planejada de inscritos WhatsApp Fluxo)
-- **Sendflow** — Comunidade WhatsApp (participantes, entradas, saídas, disparos)
-- **Looker (GA4)** — sessões, ATC, BCO, atribuição por UTM
-- **Input mensal** — metas
+# 2. Configurar variáveis de ambiente
+cp .env.example .env
+# Preencher com as chaves de API de cada fonte
 
-Detalhamento completo por métrica na planilha `Métricas Gerenciamento v2.xlsx`.
+# 3. Criar projeto no Supabase e aplicar migrations
+supabase db reset
 
----
+# 4. Rodar ingestão manualmente
+python ingestion/main.py
+```
 
-## 🚫 Fora do escopo V1
-
-- CAC / LTV / ROAS por canal *(Fase 2 — nova página)*
-- Saúde da Base WhatsApp *(depende de acesso à Meta Business Manager)*
-- Recompra / Coorte / Tempo entre compras *(retenção — não é a dor atual)*
-- Qualidade de lead comercial / Tempo de ciclo *(foco é receita CRM)*
-- Aba "Sem Atribuição" para UTMs órfãs *(próximo passo)*
-- Engajamento da Comunidade *(Sendflow não expõe + não prioritário)*
+Consulte `ARCHITECTURE.md` para o modelo de dados completo e `CLAUDE.md` para as regras de desenvolvimento.
 
 ---
 
-## 🗺️ Próximos passos
+## Documentos essenciais para qualquer sessão de desenvolvimento
 
-1. **Validar o front-end** com gestão e operação
-2. **Modelar schema do Supabase** espelhando a planilha v2
-3. **Conectar fontes** via APIs (Klaviyo, Shopify, Vekta, Sendflow, Looker)
-4. **Padronizar UTMs** e implementar atribuição last-click
-5. **Substituir mockados** pelos dados reais do Supabase
-6. **Fase 2** — CAC / LTV / ROAS
-
----
-
-## 🛠️ Como abrir os arquivos
-
-- **`dashboard-crm.html` / `docs-crm.html`** — duplo clique, abre no navegador padrão. Funciona offline.
-- **`Métricas Gerenciamento v2.xlsx`** — Excel, Google Sheets ou LibreOffice.
-- **`build_planilha.py`** — Python 3 com `openpyxl` instalado. Edita o script e roda `python build_planilha.py` para regenerar a planilha.
-
----
-
-## 📩 Como compartilhar
-
-**Com o gestor (para aprovação):**
-- Enviar `docs-crm.html` + `dashboard-crm.html` juntos (zip ou anexos no e-mail)
-- Ou publicar online via [tiiny.host](https://tiiny.host) (drag & drop, sem cadastro) ou Netlify Drop
-
-**Com o time de dados:**
-- Compartilhar `Métricas Gerenciamento v2.xlsx` e `build_planilha.py`
+Antes de qualquer sessão, ler nesta ordem:
+1. `CLAUDE.md` — regras e stack
+2. `ARCHITECTURE.md` — estado atual do sistema
+3. `docs/sessions/` — log da última sessão
 
 ---
 
