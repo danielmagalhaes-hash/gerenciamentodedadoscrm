@@ -179,24 +179,20 @@ SELECT
     COALESCE(rev.revenue_total, 0) / NULLIF(fmg.goal_total_brl, 0) * 100, 1
   )                                                                            AS pct_achieved,
   -- dias decorridos no mês (capped em hoje)
-  EXTRACT(
-    DAY FROM
-    LEAST(CURRENT_DATE, (fmg.month + '1 month'::interval - '1 day'::interval)::date)
-    - fmg.month
-  )::integer + 1                                                               AS days_elapsed,
+  -- subtração de duas datas no PostgreSQL retorna integer direto (dias)
+  (LEAST(CURRENT_DATE, (fmg.month + '1 month'::interval - '1 day'::interval)::date)
+    - fmg.month) + 1                                                           AS days_elapsed,
   -- total de dias no mês
-  EXTRACT(
-    DAY FROM
-    (fmg.month + '1 month'::interval - '1 day'::interval)::date - fmg.month
-  )::integer + 1                                                               AS days_in_month,
+  ((fmg.month + '1 month'::interval - '1 day'::interval)::date
+    - fmg.month) + 1                                                           AS days_in_month,
   -- status: achieved / on_track / behind
   CASE
     WHEN COALESCE(rev.revenue_total, 0) >= fmg.goal_total_brl
       THEN 'achieved'
     WHEN fmg.goal_total_brl > 0
       AND COALESCE(rev.revenue_total, 0) / fmg.goal_total_brl >=
-          (EXTRACT(DAY FROM LEAST(CURRENT_DATE, (fmg.month + '1 month'::interval - '1 day'::interval)::date) - fmg.month)::numeric + 1) /
-          (EXTRACT(DAY FROM (fmg.month + '1 month'::interval - '1 day'::interval)::date - fmg.month)::numeric + 1)
+          ((LEAST(CURRENT_DATE, (fmg.month + '1 month'::interval - '1 day'::interval)::date) - fmg.month)::numeric + 1) /
+          (((fmg.month + '1 month'::interval - '1 day'::interval)::date - fmg.month)::numeric + 1)
       THEN 'on_track'
     ELSE 'behind'
   END                                                                          AS status
