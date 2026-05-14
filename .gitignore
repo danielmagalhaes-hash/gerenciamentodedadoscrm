@@ -24,3 +24,4 @@ venv/
 
 # Supabase local
 .supabase/
+supabase/.temp/
