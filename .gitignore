@@ -25,3 +25,6 @@ venv/
 # Supabase local
 .supabase/
 supabase/.temp/
+
+# Claude Code — configurações locais com credenciais
+.claude/settings.local.json
