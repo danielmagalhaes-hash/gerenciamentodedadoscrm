@@ -1,4 +1,6 @@
 from datetime import date
+from decimal import Decimal
+
 from pydantic import BaseModel
 
 
@@ -8,6 +10,8 @@ class SessionRow(BaseModel):
     sessions: int
     add_to_cart: int
     begin_checkout: int
+    orders: int = 0
+    revenue_brl: Decimal = Decimal("0")
 
 
 class SessionUtmRow(BaseModel):
@@ -21,3 +25,5 @@ class SessionUtmRow(BaseModel):
     sessions: int
     add_to_cart: int
     begin_checkout: int
+    orders: int = 0
+    revenue_brl: Decimal = Decimal("0")

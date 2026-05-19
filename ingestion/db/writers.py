@@ -295,6 +295,8 @@ def upsert_sessions(sb: Client, rows: list[SessionRow], channel_ids: dict[str, s
             "sessions": r.sessions,
             "add_to_cart": atc,
             "begin_checkout": bco,
+            "orders": r.orders,
+            "revenue_brl": str(r.revenue_brl),
             "ingested_at": now,
         })
     if skipped:
@@ -330,6 +332,8 @@ def upsert_sessions_utm(sb: Client, rows: list[SessionUtmRow], channel_ids: dict
             "sessions": r.sessions,
             "add_to_cart": atc,
             "begin_checkout": bco,
+            "orders": r.orders,
+            "revenue_brl": str(r.revenue_brl),
             "ingested_at": now,
         })
     if skipped:

@@ -4,6 +4,7 @@ import logging
 import os
 from collections import defaultdict
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 import httpx
 
@@ -41,11 +42,11 @@ def fetch_sessions_and_utm(csv_url: str | None = None) -> tuple[list[SessionRow]
     resp.raise_for_status()
 
     # Acumuladores
-    channel_totals: dict[tuple[date, str], dict[str, int]] = defaultdict(
-        lambda: {"sessions": 0, "add_to_cart": 0, "begin_checkout": 0}
+    channel_totals: dict[tuple[date, str], dict] = defaultdict(
+        lambda: {"sessions": 0, "add_to_cart": 0, "begin_checkout": 0, "orders": 0, "revenue_brl": Decimal("0")}
     )
-    utm_totals: dict[tuple, dict[str, int]] = defaultdict(
-        lambda: {"sessions": 0, "add_to_cart": 0, "begin_checkout": 0}
+    utm_totals: dict[tuple, dict] = defaultdict(
+        lambda: {"sessions": 0, "add_to_cart": 0, "begin_checkout": 0, "orders": 0, "revenue_brl": Decimal("0")}
     )
     skipped = 0
 
@@ -64,15 +65,25 @@ def fetch_sessions_and_utm(csv_url: str | None = None) -> tuple[list[SessionRow]
             skipped += 1
             continue
 
-        sessions     = int(row.get("sessoes") or 0)
-        add_to_cart  = int(row.get("add_to_cart") or 0)
+        sessions       = int(row.get("sessoes") or 0)
+        add_to_cart    = int(row.get("add_to_cart") or 0)
         begin_checkout = int(row.get("begin_checkout") or 0)
+        orders         = int(row.get("purchase") or 0)
+
+        # Formato BR: "2.286,84" → Decimal("2286.84")
+        raw_revenue = row.get("revenue", "0").strip().replace(".", "").replace(",", ".")
+        try:
+            revenue_brl = Decimal(raw_revenue) if raw_revenue else Decimal("0")
+        except InvalidOperation:
+            revenue_brl = Decimal("0")
 
         # Agrega para fact_sessions
         key = (row_date, slug)
         channel_totals[key]["sessions"]       += sessions
         channel_totals[key]["add_to_cart"]    += add_to_cart
         channel_totals[key]["begin_checkout"] += begin_checkout
+        channel_totals[key]["orders"]         += orders
+        channel_totals[key]["revenue_brl"]    += revenue_brl
 
         # Agrega para fact_sessions_utm
         utm_source, utm_medium = _parse_source_medium(row.get("source_medium", ""))
@@ -87,6 +98,8 @@ def fetch_sessions_and_utm(csv_url: str | None = None) -> tuple[list[SessionRow]
         utm_totals[utm_key]["sessions"]       += sessions
         utm_totals[utm_key]["add_to_cart"]    += add_to_cart
         utm_totals[utm_key]["begin_checkout"] += begin_checkout
+        utm_totals[utm_key]["orders"]         += orders
+        utm_totals[utm_key]["revenue_brl"]    += revenue_brl
 
     if skipped:
         logger.warning({"event": "sheets_rows_skipped", "skipped": skipped})
@@ -98,6 +111,8 @@ def fetch_sessions_and_utm(csv_url: str | None = None) -> tuple[list[SessionRow]
             sessions=vals["sessions"],
             add_to_cart=vals["add_to_cart"],
             begin_checkout=vals["begin_checkout"],
+            orders=vals["orders"],
+            revenue_brl=vals["revenue_brl"],
         )
         for (row_date, slug), vals in channel_totals.items()
     ]
@@ -114,6 +129,8 @@ def fetch_sessions_and_utm(csv_url: str | None = None) -> tuple[list[SessionRow]
             sessions=vals["sessions"],
             add_to_cart=vals["add_to_cart"],
             begin_checkout=vals["begin_checkout"],
+            orders=vals["orders"],
+            revenue_brl=vals["revenue_brl"],
         )
         for (row_date, slug, utm_src, utm_med, utm_camp, utm_term, utm_cont), vals in utm_totals.items()
     ]
