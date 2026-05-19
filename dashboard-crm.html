@@ -850,7 +850,7 @@ function channelHTML(key){
   `;
 }
 
-function renderChannel(key){
+async function renderChannel(key){
   const ch = CHANNELS[key];
   const cfg = CFG[key];
   const isEmail = ch.type==='email';
@@ -858,13 +858,53 @@ function renderChannel(key){
   const isCommunity = key==='co';
   const page = document.getElementById('page-'+key);
   page.innerHTML = channelHTML(key);
+  document.getElementById('kpi-'+key).innerHTML =
+    '<div style="grid-column:1/-1;color:var(--muted);padding:20px;text-align:center">Carregando dados...</div>';
 
-  const s = sumChannel(key,30);
-  const ticket = s.rev/s.purchases;
-  const conv   = s.purchases/s.sessions;
-  const rps    = s.rev/s.sessions;
+  // — Fetch real data for this channel —
+  const {start, end} = getDateRange(document.getElementById('f-period').value);
+  const dlabel = d => d.slice(5).replace('-','/');
+  let channelRows = [];
+  try {
+    const allRows = await fetchChannelData(start, end);
+    channelRows = allRows.filter(r => r.channel_slug === ch.slug);
+  } catch(err) {
+    document.getElementById('kpi-'+key).innerHTML =
+      `<div style="grid-column:1/-1;color:var(--danger);padding:20px">Erro ao carregar: ${err.message}</div>`;
+    return;
+  }
 
-  // Estimar volumes para o canal
+  const totals = channelRows.reduce((a, r) => ({
+    sessions:       a.sessions       + (r.sessions||0),
+    add_to_cart:    a.add_to_cart    + (r.add_to_cart||0),
+    begin_checkout: a.begin_checkout + (r.begin_checkout||0),
+    orders:         a.orders         + (r.orders||0),
+    revenue_brl:    a.revenue_brl    + parseFloat(r.revenue_brl||0),
+  }), {sessions:0, add_to_cart:0, begin_checkout:0, orders:0, revenue_brl:0});
+
+  const s = {rev:totals.revenue_brl, purchases:totals.orders, sessions:totals.sessions,
+              atc:totals.add_to_cart, bco:totals.begin_checkout};
+
+  const dates   = makeDateRange(start, end);
+  const dlabels = dates.map(dlabel);
+  const byDay   = {};
+  for (const r of channelRows) {
+    const d = (r.date||'').slice(0,10);
+    if (!byDay[d]) byDay[d] = {revenue_brl:0,orders:0,sessions:0,add_to_cart:0,begin_checkout:0};
+    byDay[d].revenue_brl    += parseFloat(r.revenue_brl||0);
+    byDay[d].orders         += (r.orders||0);
+    byDay[d].sessions       += (r.sessions||0);
+    byDay[d].add_to_cart    += (r.add_to_cart||0);
+    byDay[d].begin_checkout += (r.begin_checkout||0);
+  }
+  const dailyRevData = dates.map(d => byDay[d]?.revenue_brl || 0);
+
+  const safe = (a,b) => b>0 ? a/b : 0;
+  const ticket = safe(s.rev, s.purchases);
+  const conv   = safe(s.purchases, s.sessions);
+  const rps    = safe(s.rev, s.sessions);
+
+  // Estimar volumes para o canal (mock — Klaviyo/Vekta ainda sem dados)
   let inscritos=0, envios=0, disparos=0, participantes=0;
   if(isEmail){
     inscritos = Math.round(s.purchases*180*rand(0.95,1.05));
@@ -880,54 +920,48 @@ function renderChannel(key){
   const revPerInsc = inscritos>0 ? s.rev/inscritos : 0;
   const revPerDisp = (isEmail?envios:disparos)>0 ? s.rev/(isEmail?envios:disparos) : 0;
 
-  // KPIs do canal (6 KPIs)
+  // KPIs do canal
   const kpis = [
-    {label:'Faturamento', val:fmtBRLfull(s.rev), dDay:rand(-3,8).toFixed(1)+'%', dMonth:rand(-2,15).toFixed(1)+'%'},
-    {label:'Compras', val:fmtInt(s.purchases), dDay:rand(-3,8).toFixed(1)+'%', dMonth:rand(-2,12).toFixed(1)+'%'},
-    {label:'Ticket Médio', val:fmtBRLfull(ticket), dDay:rand(-2,3).toFixed(1)+'%', dMonth:rand(-1,4).toFixed(1)+'%'},
-    {label:'RPS', val:fmtBRL2(rps), dDay:rand(-3,5).toFixed(1)+'%', dMonth:rand(-2,8).toFixed(1)+'%'},
-    {label:'Conversão Geral', val:fmtPct(conv), dDay:'+'+rand(0.01,0.3).toFixed(2)+'pp', dMonth:'+'+rand(0.05,0.4).toFixed(2)+'pp'}
+    {label:'Faturamento', val:fmtBRLfull(s.rev)},
+    {label:'Compras',     val:fmtInt(s.purchases)},
+    {label:'Ticket Médio',val:s.purchases>0?fmtBRLfull(ticket):'—'},
+    {label:'RPS',         val:s.sessions>0?fmtBRL2(rps):'—'},
+    {label:'Conversão',   val:s.sessions>0?fmtPct(conv):'—'},
   ];
   if(cfg.topPerInscrito){
-    kpis.push({label:'Receita / Inscrito', val:fmtBRL2(revPerInsc), dDay:rand(-2,6).toFixed(1)+'%', dMonth:rand(-1,10).toFixed(1)+'%', highlight:true});
+    kpis.push({label:'Receita / Inscrito', val:fmtBRL2(revPerInsc), highlight:true});
   } else if(cfg.topPerDisparo){
-    kpis.push({label:'Receita / Disparo', val:fmtBRL2(revPerDisp), dDay:rand(-2,6).toFixed(1)+'%', dMonth:rand(-1,10).toFixed(1)+'%', highlight:true});
+    kpis.push({label:'Receita / Disparo', val:fmtBRL2(revPerDisp), highlight:true});
   }
-  document.getElementById('kpi-'+key).innerHTML = kpis.map(k=>{
-    const upDay=!k.dDay.startsWith('-'); const upMonth=!k.dMonth.startsWith('-');
-    return `<div class="card ${k.highlight?'kpi-card highlight':''}">
+  document.getElementById('kpi-'+key).innerHTML = kpis.map(k=>`
+    <div class="card ${k.highlight?'kpi-card highlight':''}">
       <div class="card-title">${k.label}</div>
       <div class="kpi-value">${k.val}</div>
-      <div class="kpi-deltas">
-        <span class="delta ${upDay?'up':'down'}">${upDay?'▲':'▼'} ${k.dDay.replace('-','')}</span>
-        <span class="delta-label">vs dia</span>
-        <span class="delta ${upMonth?'up':'down'}">${upMonth?'▲':'▼'} ${k.dMonth.replace('-','')}</span>
-        <span class="delta-label">vs mês</span>
-      </div>
-    </div>`;
-  }).join('');
+      <div class="kpi-deltas"><span class="delta-label">${dlabel(start)} → ${dlabel(end)}</span></div>
+    </div>`).join('');
 
   renderFunnel('funnel-'+key, s);
 
   mkChart('chart-rev-'+key,{
     type:'line',
-    data:{labels:DAILY[key].map((_,i)=>'D-'+(30-i)),datasets:[{
-      label:'Receita',data:DAILY[key].map(d=>d.rev),
+    data:{labels:dlabels,datasets:[{
+      label:'Receita',data:dailyRevData,
       borderColor:ch.color,backgroundColor:ch.color+'33',fill:true,tension:.35,pointRadius:0,borderWidth:2
     }]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtBRLfull(c.parsed.y)}}},scales:{x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0}},y:{ticks:{callback:v=>fmtBRL(v)},grid:{color:'#f1f4f8'}}}}
   });
 
-  // Gráfico diário de Receita/Inscrito ou Receita/Disparo
-  const dailyBase = cfg.topPerInscrito ? (inscritos/30) : ((isEmail?envios:disparos)/30);
-  const dailyEff = DAILY[key].map(d=>{
+  // Gráfico de Receita/Inscrito ou Receita/Disparo (base estimada — mock)
+  const dailyBase = cfg.topPerInscrito ? (inscritos/dates.length) : ((isEmail?envios:disparos)/dates.length);
+  const dailyEff = dates.map(d=>{
     const dayBase = dailyBase * rand(0.85,1.15);
-    return d.rev / Math.max(dayBase,1);
+    const dayRev  = byDay[d]?.revenue_brl || 0;
+    return safe(dayRev, Math.max(dayBase,1));
   });
   const effLabel = cfg.topPerInscrito ? 'Receita por Inscrito' : 'Receita por Disparo';
   mkChart('chart-eff-'+key,{
     type:'line',
-    data:{labels:DAILY[key].map((_,i)=>'D-'+(30-i)),datasets:[{
+    data:{labels:dlabels,datasets:[{
       label:effLabel,data:dailyEff,
       borderColor:ch.color,backgroundColor:ch.color+'22',fill:true,tension:.35,pointRadius:2,pointBackgroundColor:ch.color,borderWidth:2
     }]},
@@ -1253,11 +1287,17 @@ async function applyFilters(){
       return;
     }
   }
-  // Garante que está na aba Resumo para ver os dados
-  if (!document.getElementById('page-resumo').classList.contains('active')) {
-    document.querySelector('.tab-btn[data-page="resumo"]').click();
+  // Limpa cache para que canais já visitados re-rendereizem com os novos filtros
+  renderedChannels.clear();
+  // Descobre qual aba está ativa
+  const activeBtn = document.querySelector('.tab-btn.active');
+  const activePage = activeBtn ? activeBtn.dataset.page : 'resumo';
+  if (activePage === 'resumo') {
+    await renderResumo();
+  } else {
+    await renderChannel(activePage);
+    renderedChannels.add(activePage);
   }
-  await renderResumo();
   const flash = document.createElement('div');
   flash.textContent = '✓ Dados atualizados';
   flash.style.cssText = 'position:fixed;top:20px;right:20px;background:var(--success);color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:1000';
