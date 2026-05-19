@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard CRM</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root{
   --bg:#f4f6fa; --card:#fff; --border:#e6eaf0; --text:#0f1b2d; --muted:#6b7785;
@@ -123,13 +124,22 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
 <div class="filters">
   <div class="filter">
     <label>Período</label>
-    <select id="f-period">
+    <select id="f-period" onchange="onPeriodChange()">
       <option value="d1">D-1 (Ontem)</option>
       <option value="7d" selected>Últimos 7 dias</option>
       <option value="mtd">MTD (Mês até hoje)</option>
       <option value="prev">Mês anterior</option>
       <option value="30d">Últimos 30 dias</option>
+      <option value="custom">Datas personalizadas</option>
     </select>
+  </div>
+  <div class="filter" id="f-custom-wrap" style="display:none">
+    <label>De</label>
+    <input type="date" id="f-date-start" style="min-width:130px">
+  </div>
+  <div class="filter" id="f-custom-wrap2" style="display:none">
+    <label>Até</label>
+    <input type="date" id="f-date-end" style="min-width:130px">
   </div>
   <div class="filter">
     <label>Comparativo</label>
@@ -218,7 +228,7 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
 
   <div class="grid grid-1" style="margin-top:14px">
     <div class="card">
-      <div class="card-title">Receita diária · 1ª Compra vs Recompra · últimos 30 dias</div>
+      <div class="card-title" id="title-first-repeat">Receita diária · 1ª Compra vs Recompra (pedidos atribuídos)</div>
       <div class="chart-box"><canvas id="chart-first-repeat"></canvas></div>
     </div>
   </div>
@@ -353,26 +363,131 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
 
 <script>
 // =========================================
+// SUPABASE CLIENT
+// =========================================
+const _sb = supabase.createClient(
+  'https://aczvusdzfrmborvvfqib.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenZ1c2R6ZnJtYm9ydnZmcWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3ODkwNTIsImV4cCI6MjA5NDM2NTA1Mn0.hb0RjoXdmHN7wKLvhRCkJjq-ycqxE3FaJlYKtMEqumk'
+);
+
+// =========================================
 // FORMATAÇÃO
 // =========================================
-const fmtBRL = v => 'R$ '+ (v>=1000?(v/1000).toFixed(v>=10000?0:1)+'k':v.toFixed(0));
-const fmtBRLfull = v => 'R$ '+ v.toLocaleString('pt-BR',{maximumFractionDigits:0});
-const fmtBRL2 = v => 'R$ '+ v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-const fmtInt = v => v.toLocaleString('pt-BR');
+const fmtBRL = v => 'R$ '+(v>=1000?(v/1000).toFixed(v>=10000?0:1)+'k':v.toFixed(0));
+const fmtBRLfull = v => 'R$ '+Math.round(v).toLocaleString('pt-BR');
+const fmtBRL2 = v => 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtInt = v => Math.round(v).toLocaleString('pt-BR');
 const fmtPct = v => (v*100).toFixed(2).replace('.',',')+'%';
 const fmtPct1 = v => (v*100).toFixed(1).replace('.',',')+'%';
 const rand = (min,max) => Math.random()*(max-min)+min;
 
 // =========================================
+// CHART REGISTRY
+// =========================================
+const _charts = {};
+function mkChart(id, cfg) {
+  if (_charts[id]) { try { _charts[id].destroy(); } catch(e) {} }
+  const el = document.getElementById(id);
+  if (!el) return null;
+  return (_charts[id] = new Chart(el, cfg));
+}
+
+// =========================================
+// DATE HELPERS
+// =========================================
+const isoDate = d => d.toISOString().slice(0,10);
+function getDateRange(period) {
+  const t = new Date(); t.setHours(0,0,0,0);
+  if (period === 'custom') {
+    const s = document.getElementById('f-date-start').value;
+    const e = document.getElementById('f-date-end').value;
+    if (!s || !e) return {start:isoDate(t),end:isoDate(t)};
+    return {start: s <= e ? s : e, end: s <= e ? e : s};
+  }
+  if (period === 'd1') { const y=new Date(t); y.setDate(y.getDate()-1); return {start:isoDate(y),end:isoDate(y)}; }
+  if (period === '7d') { const s=new Date(t); s.setDate(s.getDate()-6); return {start:isoDate(s),end:isoDate(t)}; }
+  if (period === 'mtd') { return {start:`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-01`,end:isoDate(t)}; }
+  if (period === 'prev') {
+    const s=new Date(t.getFullYear(),t.getMonth()-1,1), e=new Date(t.getFullYear(),t.getMonth(),0);
+    return {start:isoDate(s),end:isoDate(e)};
+  }
+  const s=new Date(t); s.setDate(s.getDate()-29); return {start:isoDate(s),end:isoDate(t)};
+}
+function onPeriodChange() {
+  const custom = document.getElementById('f-period').value === 'custom';
+  document.getElementById('f-custom-wrap').style.display  = custom ? '' : 'none';
+  document.getElementById('f-custom-wrap2').style.display = custom ? '' : 'none';
+  if (custom) {
+    // pré-preenche com os últimos 30 dias como sugestão
+    const t=new Date(); t.setHours(0,0,0,0);
+    const s=new Date(t); s.setDate(s.getDate()-29);
+    if (!document.getElementById('f-date-start').value) document.getElementById('f-date-start').value = isoDate(s);
+    if (!document.getElementById('f-date-end').value)   document.getElementById('f-date-end').value   = isoDate(t);
+  }
+}
+function makeDateRange(start, end) {
+  const dates=[], cur=new Date(start), last=new Date(end);
+  while (cur<=last) { dates.push(isoDate(cur)); cur.setDate(cur.getDate()+1); }
+  return dates;
+}
+
+// =========================================
+// FETCH + AGGREGATE
+// =========================================
+async function fetchChannelData(start, end) {
+  const {data,error} = await _sb.from('vw_channel_daily')
+    .select('date,channel_slug,channel_name,sessions,add_to_cart,begin_checkout,orders,revenue_brl')
+    .gte('date',start).lte('date',end).order('date');
+  if (error) throw error;
+  return data || [];
+}
+async function fetchFirstRepeat(start, end) {
+  // View pré-agregada no banco (R11) — evita limite de 1000 rows do JS client
+  const {data,error} = await _sb.from('vw_revenue_first_repeat')
+    .select('date,tipo,revenue_brl,orders')
+    .gte('date',start).lte('date',end);
+  if (error) { console.error('fetchFirstRepeat error:', error); return []; }
+  return data || [];
+}
+function aggregateTotals(rows) {
+  const byChannel={}, byDate={};
+  for (const r of rows) {
+    const s = r.channel_slug;
+    if (!byChannel[s]) byChannel[s]={slug:s,name:r.channel_name||s,sessions:0,add_to_cart:0,begin_checkout:0,orders:0,revenue_brl:0};
+    byChannel[s].sessions       += (r.sessions||0);
+    byChannel[s].add_to_cart    += (r.add_to_cart||0);
+    byChannel[s].begin_checkout += (r.begin_checkout||0);
+    byChannel[s].orders         += (r.orders||0);
+    byChannel[s].revenue_brl    += parseFloat(r.revenue_brl)||0;
+    if (!byDate[r.date]) byDate[r.date]={};
+    if (!byDate[r.date][s]) byDate[r.date][s]={revenue_brl:0,orders:0,sessions:0,add_to_cart:0,begin_checkout:0};
+    byDate[r.date][s].revenue_brl    += parseFloat(r.revenue_brl)||0;
+    byDate[r.date][s].orders         += (r.orders||0);
+    byDate[r.date][s].sessions       += (r.sessions||0);
+    byDate[r.date][s].add_to_cart    += (r.add_to_cart||0);
+    byDate[r.date][s].begin_checkout += (r.begin_checkout||0);
+  }
+  const total = Object.values(byChannel).reduce((a,c)=>({
+    sessions:a.sessions+c.sessions, add_to_cart:a.add_to_cart+c.add_to_cart,
+    begin_checkout:a.begin_checkout+c.begin_checkout, orders:a.orders+c.orders,
+    revenue_brl:a.revenue_brl+c.revenue_brl,
+  }), {sessions:0,add_to_cart:0,begin_checkout:0,orders:0,revenue_brl:0});
+  return {byChannel, byDate, total};
+}
+
+// =========================================
 // CONFIGURAÇÃO
 // =========================================
 const CHANNELS = {
-  ef: {name:'E-mail Fluxo',     color:'#2563eb', weight:0.35, type:'email',     isFluxo:true},
-  wf: {name:'WhatsApp Fluxo',   color:'#10b981', weight:0.25, type:'wpp',       isFluxo:true},
-  ec: {name:'E-mail Campanha',  color:'#8b5cf6', weight:0.20, type:'email',     isFluxo:false},
-  wc: {name:'WhatsApp Campanha',color:'#ec4899', weight:0.15, type:'wpp',       isFluxo:false},
-  co: {name:'Comunidade WhatsApp',color:'#f59e0b', weight:0.05, type:'community',isFluxo:false}
+  ef: {name:'E-mail Fluxo',        slug:'email_flow',    color:'#2563eb', weight:0.35, type:'email',    isFluxo:true },
+  ec: {name:'E-mail Campanha',      slug:'email_campaign',color:'#8b5cf6', weight:0.20, type:'email',    isFluxo:false},
+  wf: {name:'WhatsApp Fluxo',       slug:'wpp_flow',      color:'#10b981', weight:0.25, type:'wpp',      isFluxo:true },
+  wc: {name:'WhatsApp Campanha',    slug:'wpp_campaign',  color:'#ec4899', weight:0.15, type:'wpp',      isFluxo:false},
+  co: {name:'Comunidade WhatsApp',  slug:'wpp_community', color:'#f59e0b', weight:0.05, type:'community',isFluxo:false},
 };
+const SLUG_COLOR = Object.fromEntries(Object.values(CHANNELS).map(c=>[c.slug,c.color]));
+const SLUG_NAME  = Object.fromEntries(Object.values(CHANNELS).map(c=>[c.slug,c.name]));
+const SLUG_ORDER = ['email_flow','email_campaign','wpp_flow','wpp_campaign','wpp_community'];
 
 const CFG = {
   ef:{ topPerInscrito:true,  topPerDisparo:false, rankingMetric:'inscrito', rankingLabel:'Receita / Inscrito', drillDown:true,  pieceLabel:'E-mail', showInscritos:true,  hasHealth:true },
@@ -390,289 +505,223 @@ const ASSETS = {
   co: ['Drop Coleção SS25','Cupom Surpresa Comunidade','Pré-venda Exclusiva','Restock Best-sellers','Sneak Peek Próxima Coleção','Cupom Aniversário Marca','Frete Grátis Comunidade','Black Friday Comunidade']
 };
 
-const TOTAL_MONTH = 2000000;
-const DAILY_AVG   = TOTAL_MONTH/30;
-const TICKET      = 500;
-const CONV        = 0.0244;
+// Constantes usadas nas páginas de canal (mock V1)
+const TICKET = 500;
+const CONV   = 0.0244;
 
 // =========================================
-// MOCK DATA
+// RESUMO (dados reais do Supabase)
 // =========================================
-function buildDailyData(){
-  const data = {};
-  Object.keys(CHANNELS).forEach(c=>{
-    data[c] = [];
-    const base = DAILY_AVG * CHANNELS[c].weight;
-    for(let i=0;i<30;i++){
-      const noise = rand(0.7,1.35);
-      const weekend = (i%7===5||i%7===6)?0.85:1;
-      const rev = base*noise*weekend;
-      const purchases = Math.round(rev/TICKET * rand(0.9,1.1));
-      const sessions = Math.round(purchases/CONV * rand(0.9,1.15));
-      const atc = Math.round(sessions * rand(0.18,0.24));
-      const bco = Math.round(atc * rand(0.40,0.55));
-      data[c].push({day:i+1,rev,purchases,sessions,atc,bco});
-    }
-  });
-  return data;
-}
-const DAILY = buildDailyData();
+async function renderResumo() {
+  const period = document.getElementById('f-period').value;
+  const {start, end} = getDateRange(period);
 
-function sumChannel(c, days=30){
-  return DAILY[c].slice(-days).reduce((a,d)=>({
-    rev:a.rev+d.rev, purchases:a.purchases+d.purchases,
-    sessions:a.sessions+d.sessions, atc:a.atc+d.atc, bco:a.bco+d.bco
-  }),{rev:0,purchases:0,sessions:0,atc:0,bco:0});
-}
-function sumAll(days=30){
-  const t = {rev:0,purchases:0,sessions:0,atc:0,bco:0};
-  Object.keys(CHANNELS).forEach(c=>{
-    const s = sumChannel(c,days);
-    t.rev+=s.rev; t.purchases+=s.purchases; t.sessions+=s.sessions; t.atc+=s.atc; t.bco+=s.bco;
-  });
-  return t;
-}
+  document.getElementById('kpi-topline').innerHTML =
+    '<div style="grid-column:1/-1;color:var(--muted);padding:20px;text-align:center">Carregando dados...</div>';
 
-// =========================================
-// RESUMO
-// =========================================
-function renderResumo(){
-  const t30 = sumAll(30);
-  const ticket = t30.rev/t30.purchases;
-  const conv = t30.purchases/t30.sessions;
-  const rps = t30.rev/t30.sessions;
+  let rows, frData;
+  try {
+    [rows, frData] = await Promise.all([fetchChannelData(start,end), fetchFirstRepeat(start,end)]);
+  } catch(err) {
+    document.getElementById('kpi-topline').innerHTML =
+      `<div style="grid-column:1/-1;color:var(--danger);padding:20px">Erro ao carregar: ${err.message}</div>`;
+    return;
+  }
 
-  // KPIs topline
-  const kpis = [
-    {label:'Faturamento CRM', val:fmtBRLfull(t30.rev), dDay:'+4,2%', dMonth:'+8,7%', upDay:true, upMonth:true},
-    {label:'Compras', val:fmtInt(t30.purchases), dDay:'+3,1%', dMonth:'+7,5%', upDay:true, upMonth:true},
-    {label:'Ticket Médio', val:fmtBRLfull(ticket), dDay:'+1,0%', dMonth:'+1,1%', upDay:true, upMonth:true},
-    {label:'RPS', val:fmtBRL2(rps), dDay:'-0,8%', dMonth:'+2,4%', upDay:false, upMonth:true},
-    {label:'Conversão Geral', val:fmtPct(conv), dDay:'+0,12pp', dMonth:'+0,18pp', upDay:true, upMonth:true}
-  ];
-  document.getElementById('kpi-topline').innerHTML = kpis.map(k=>`
+  const {byChannel, byDate, total} = aggregateTotals(rows);
+  const safe = (a,b) => b>0 ? a/b : 0;
+  const ticket = safe(total.revenue_brl, total.orders);
+  const conv   = safe(total.orders, total.sessions);
+  const rps    = safe(total.revenue_brl, total.sessions);
+  const dlabel = d => d.slice(5).replace('-','/');
+
+  // — KPIs topline —
+  document.getElementById('kpi-topline').innerHTML = [
+    {label:'Faturamento CRM', val:fmtBRLfull(total.revenue_brl)},
+    {label:'Pedidos',         val:fmtInt(total.orders)},
+    {label:'Ticket Médio',    val:total.orders>0?fmtBRLfull(ticket):'—'},
+    {label:'RPS',             val:total.sessions>0?fmtBRL2(rps):'—'},
+    {label:'Conversão Geral', val:total.sessions>0?fmtPct(conv):'—'},
+  ].map(k=>`
     <div class="card">
       <div class="card-title">${k.label}</div>
       <div class="kpi-value">${k.val}</div>
-      <div class="kpi-deltas">
-        <span class="delta ${k.upDay?'up':'down'}">${k.upDay?'▲':'▼'} ${k.dDay}</span>
-        <span class="delta-label">vs dia</span>
-        <span class="delta ${k.upMonth?'up':'down'}">${k.upMonth?'▲':'▼'} ${k.dMonth}</span>
-        <span class="delta-label">vs mês</span>
-      </div>
-    </div>
-  `).join('');
+      <div class="kpi-deltas"><span class="delta-label">${dlabel(start)} → ${dlabel(end)}</span></div>
+    </div>`).join('');
 
-  // Receita 1ª vs Recompra
-  const revFirst = t30.rev * 0.60;
-  const revRepeat = t30.rev * 0.40;
-  const metaFirst = 1200000, metaRepeat = 800000, metaTotal = 2000000;
-  const pctFirst=revFirst/metaFirst, pctRepeat=revRepeat/metaRepeat, pctTotal=t30.rev/metaTotal;
+  // — Receita 1ª Compra vs Recompra (view pré-agregada vw_revenue_first_repeat — R11) —
+  const revFirst  = frData.filter(r=>r.tipo==='1a_compra').reduce((s,r)=>s+parseFloat(r.revenue_brl||0),0);
+  const revRepeat = frData.filter(r=>r.tipo==='recompra').reduce((s,r)=>s+parseFloat(r.revenue_brl||0),0);
+  const revAtrib  = revFirst + revRepeat; // sempre: first + repeat = total desta seção
 
-  document.getElementById('rev-first').textContent = fmtBRLfull(revFirst);
-  document.getElementById('meta-first').textContent = fmtBRLfull(metaFirst);
-  document.getElementById('pct-first').textContent = fmtPct1(pctFirst)+' atingido';
-  document.getElementById('bar-first').style.width = Math.min(pctFirst*100,100)+'%';
+  document.getElementById('rev-first').textContent  = fmtBRLfull(revFirst);
+  document.getElementById('meta-first').textContent = revAtrib>0 ? fmtPct1(safe(revFirst,revAtrib))+' das vendas atribuídas' : '—';
+  document.getElementById('pct-first').textContent  = revAtrib>0 ? fmtPct1(safe(revFirst,revAtrib))+' das vendas atribuídas' : 'Shopify ativo a partir mai/26';
+  document.getElementById('bar-first').style.width  = revAtrib>0 ? Math.min(safe(revFirst,revAtrib)*100,100)+'%' : '0%';
 
-  document.getElementById('rev-repeat').textContent = fmtBRLfull(revRepeat);
-  document.getElementById('meta-repeat').textContent = fmtBRLfull(metaRepeat);
-  document.getElementById('pct-repeat').textContent = fmtPct1(pctRepeat)+' atingido';
-  document.getElementById('bar-repeat').style.width = Math.min(pctRepeat*100,100)+'%';
+  document.getElementById('rev-repeat').textContent  = fmtBRLfull(revRepeat);
+  document.getElementById('meta-repeat').textContent = revAtrib>0 ? fmtPct1(safe(revRepeat,revAtrib))+' das vendas atribuídas' : '—';
+  document.getElementById('pct-repeat').textContent  = revAtrib>0 ? fmtPct1(safe(revRepeat,revAtrib))+' das vendas atribuídas' : 'Shopify ativo a partir mai/26';
+  document.getElementById('bar-repeat').style.width  = revAtrib>0 ? Math.min(safe(revRepeat,revAtrib)*100,100)+'%' : '0%';
 
-  document.getElementById('rev-total').textContent = fmtBRLfull(t30.rev);
-  document.getElementById('meta-total').textContent = fmtBRLfull(metaTotal);
-  document.getElementById('pct-total').textContent = fmtPct1(pctTotal)+' atingido';
-  document.getElementById('bar-total').style.width = Math.min(pctTotal*100,100)+'%';
+  document.getElementById('rev-total').textContent  = fmtBRLfull(revAtrib);
+  document.getElementById('meta-total').textContent = '—';
+  document.getElementById('pct-total').textContent  = '—';
+  document.getElementById('bar-total').style.width  = '0%';
 
-  const days = Array.from({length:30},(_,i)=>'D-'+(30-i));
-  const dailyTotal = Array.from({length:30},(_,i)=>Object.keys(CHANNELS).reduce((s,c)=>s+DAILY[c][i].rev,0));
-  const dailyFirst = dailyTotal.map(v=>v*0.6*rand(0.92,1.08));
-  const dailyRepeat = dailyTotal.map((v,i)=>v - dailyFirst[i]);
+  // — Gráfico diário 1ª vs Recompra (por dia, pedidos atribuídos) —
+  const dates   = makeDateRange(start, end);
+  const dlabels = dates.map(dlabel);
+  // frData vem da view pré-agregada por (date, tipo) — max 2 linhas/dia, sem limite de 1000
+  const dayRev = (d, tipo) => {
+    const row = frData.find(r=>(r.date||'').slice(0,10)===d && r.tipo===tipo);
+    return row ? parseFloat(row.revenue_brl||0) : 0;
+  };
 
-  new Chart(document.getElementById('chart-first-repeat'),{
+  document.getElementById('title-first-repeat').textContent =
+    `Receita por dia · 1ª Compra vs Recompra · ${dlabel(start)} → ${dlabel(end)} (pedidos atribuídos ao CRM)`;
+
+  mkChart('chart-first-repeat',{
     type:'bar',
-    data:{labels:days,datasets:[
-      {label:'1ª Compra',data:dailyFirst,backgroundColor:'#2563eb',stack:'r'},
-      {label:'Recompra',data:dailyRepeat,backgroundColor:'#10b981',stack:'r'}
+    data:{labels:dlabels,datasets:[
+      {label:'1ª Compra', data:dates.map(d=>dayRev(d,'1a_compra')), backgroundColor:'#2563eb',stack:'r'},
+      {label:'Recompra',  data:dates.map(d=>dayRev(d,'recompra')),  backgroundColor:'#10b981',stack:'r'},
     ]},
     options:chartStackedBarOpts()
   });
 
-  // Ranking de canais
-  const rank = Object.keys(CHANNELS).map(c=>({c,name:CHANNELS[c].name,color:CHANNELS[c].color,rev:sumChannel(c,30).rev}))
-    .sort((a,b)=>b.rev-a.rev);
-  new Chart(document.getElementById('chart-channel-rank'),{
+  // — Ranking de canais —
+  const chArr = Object.values(byChannel).sort((a,b)=>b.revenue_brl-a.revenue_brl);
+  const cNames  = chArr.map(c=>c.name);
+  const cColors = chArr.map(c=>SLUG_COLOR[c.slug]||'#94a3b8');
+  mkChart('chart-channel-rank',{
     type:'bar',
-    data:{labels:rank.map(r=>r.name),datasets:[{
-      data:rank.map(r=>r.rev),
-      backgroundColor:rank.map(r=>r.color),
-      borderRadius:6
-    }]},
-    options:{
-      indexAxis:'y',responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtBRLfull(ctx.parsed.x)+' ('+(ctx.parsed.x/t30.rev*100).toFixed(1)+'%)'}}},
-      scales:{x:{ticks:{callback:v=>fmtBRL(v)},grid:{color:'#f1f4f8'}},y:{grid:{display:false}}}
-    }
+    data:{labels:cNames,datasets:[{data:chArr.map(c=>c.revenue_brl),backgroundColor:cColors,borderRadius:6}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtBRLfull(ctx.parsed.x)+' ('+(total.revenue_brl>0?(ctx.parsed.x/total.revenue_brl*100).toFixed(1):0)+'%)'}}},
+      scales:{x:{ticks:{callback:v=>fmtBRL(v)},grid:{color:'#f1f4f8'}},y:{grid:{display:false}}}}
   });
 
-  new Chart(document.getElementById('chart-channel-stack'),{
+  // — Evolução diária por canal —
+  mkChart('chart-channel-stack',{
     type:'line',
-    data:{labels:days,datasets:Object.keys(CHANNELS).map(c=>({
-      label:CHANNELS[c].name,
-      data:DAILY[c].map(d=>d.rev),
-      backgroundColor:CHANNELS[c].color+'cc',
-      borderColor:CHANNELS[c].color,
-      fill:true,tension:.3,pointRadius:0,borderWidth:1.5
+    data:{labels:dlabels,datasets:SLUG_ORDER.filter(s=>byChannel[s]).map(s=>({
+      label:byChannel[s].name,
+      data:dates.map(d=>byDate[d]?.[s]?.revenue_brl||0),
+      backgroundColor:(SLUG_COLOR[s]||'#94a3b8')+'cc',
+      borderColor:SLUG_COLOR[s]||'#94a3b8',
+      fill:true,tension:.3,pointRadius:0,borderWidth:1.5,
     }))},
-    options:{
-      responsive:true,maintainAspectRatio:false,
+    options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}},
-      scales:{x:{grid:{display:false}},y:{stacked:true,ticks:{callback:v=>fmtBRL(v)},grid:{color:'#f1f4f8'}}}
-    }
+      scales:{x:{grid:{display:false}},y:{stacked:true,ticks:{callback:v=>fmtBRL(v)},grid:{color:'#f1f4f8'}}}}
   });
 
-  // Indicadores de eficiência — por canal
-  document.getElementById('kpi-sessions').textContent = fmtInt(t30.sessions);
-  document.getElementById('kpi-conv').textContent = fmtPct(conv);
-  document.getElementById('kpi-tkm').textContent = fmtBRLfull(ticket);
-  document.getElementById('kpi-rps').textContent = fmtBRL2(rps);
+  // — Indicadores de eficiência —
+  document.getElementById('kpi-sessions').textContent = fmtInt(total.sessions);
+  document.getElementById('kpi-conv').textContent     = total.sessions>0?fmtPct(conv):'—';
+  document.getElementById('kpi-tkm').textContent      = total.orders>0?fmtBRLfull(ticket):'—';
+  document.getElementById('kpi-rps').textContent      = total.sessions>0?fmtBRL2(rps):'—';
 
-  const channelKeys = Object.keys(CHANNELS);
-  const channelNames = channelKeys.map(c=>CHANNELS[c].name);
-  const channelColors = channelKeys.map(c=>CHANNELS[c].color);
-  const perChannel = channelKeys.map(c=>sumChannel(c,30));
-
-  const mkHorizBar = (id,values,labels=channelNames,colors=channelColors,fmt=fmtInt)=>{
-    new Chart(document.getElementById(id),{
-      type:'bar',
-      data:{labels,datasets:[{data:values,backgroundColor:colors,borderRadius:4}]},
-      options:{
-        indexAxis:'y',responsive:true,maintainAspectRatio:false,
-        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmt(c.parsed.x)}}},
-        scales:{x:{ticks:{font:{size:9},callback:v=>fmt(v)},grid:{color:'#f1f4f8'}},y:{ticks:{font:{size:9}},grid:{display:false}}}
-      }
-    });
-  };
-  mkHorizBar('chart-sessions', perChannel.map(p=>p.sessions),channelNames,channelColors,fmtInt);
-  mkHorizBar('chart-conv', perChannel.map(p=>p.purchases/p.sessions*100),channelNames,channelColors,v=>v.toFixed(2).replace('.',',')+'%');
-  mkHorizBar('chart-tkm', perChannel.map(p=>p.rev/p.purchases),channelNames,channelColors,fmtBRLfull);
-  mkHorizBar('chart-rps', perChannel.map(p=>p.rev/p.sessions),channelNames,channelColors,fmtBRL2);
-
-  // Time series por canal das 4 métricas
-  const mkLineTS = (id, fn, fmt) => {
-    new Chart(document.getElementById(id),{
-      type:'line',
-      data:{labels:days, datasets:channelKeys.map(c=>({
-        label:CHANNELS[c].name,
-        data:DAILY[c].map(fn),
-        borderColor:CHANNELS[c].color,
-        backgroundColor:'transparent',
-        tension:.3, pointRadius:0, borderWidth:1.8
-      }))},
-      options:{
-        responsive:true,maintainAspectRatio:false,
-        plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}},
-        scales:{x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0}},y:{ticks:{callback:v=>fmt(v),font:{size:10}},grid:{color:'#f1f4f8'}}}
-      }
-    });
-  };
-  mkLineTS('chart-sessions-ts', d=>d.sessions, fmtInt);
-  mkLineTS('chart-conv-ts', d=>d.purchases/d.sessions*100, v=>v.toFixed(2).replace('.',',')+'%');
-  mkLineTS('chart-tkm-ts', d=>d.rev/d.purchases, v=>fmtBRL(v));
-  mkLineTS('chart-rps-ts', d=>d.rev/d.sessions, v=>fmtBRL2(v));
-
-  // ===== Captação de Leads =====
-  const leadsDaily = {
-    'Popup Site':       Array.from({length:30},()=>Math.round(rand(180,340))),
-    'Form Footer':      Array.from({length:30},()=>Math.round(rand(40,90))),
-    'Form Checkout':    Array.from({length:30},()=>Math.round(rand(60,140))),
-    'Landing Page':     Array.from({length:30},()=>Math.round(rand(80,200))),
-    'WhatsApp Opt-in':  Array.from({length:30},()=>Math.round(rand(50,120)))
-  };
-  const leadsTotalDay = Array.from({length:30},(_,i)=>Object.values(leadsDaily).reduce((s,arr)=>s+arr[i],0));
-  const leadsMTD = leadsTotalDay.reduce((a,b)=>a+b,0);
-  const leadsAvg = Math.round(leadsMTD/30);
-  const leadsPeak = Math.max(...leadsTotalDay);
-  document.getElementById('leads-mtd').textContent = fmtInt(leadsMTD);
-  document.getElementById('leads-avg').textContent = fmtInt(leadsAvg);
-  document.getElementById('leads-peak').textContent = fmtInt(leadsPeak)+' leads';
-
-  const leadsColors = ['#2563eb','#10b981','#8b5cf6','#ec4899','#f59e0b'];
-  new Chart(document.getElementById('chart-leads-daily'),{
+  const mkHBar = (id,vals,fmt=fmtInt) => mkChart(id,{
     type:'bar',
-    data:{labels:days,datasets:Object.keys(leadsDaily).map((k,i)=>({
-      label:k,data:leadsDaily[k],backgroundColor:leadsColors[i],stack:'l',borderRadius:2
+    data:{labels:cNames,datasets:[{data:vals,backgroundColor:cColors,borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmt(c.parsed.x)}}},
+      scales:{x:{ticks:{font:{size:9},callback:v=>fmt(v)},grid:{color:'#f1f4f8'}},y:{ticks:{font:{size:9}},grid:{display:false}}}}
+  });
+  mkHBar('chart-sessions', chArr.map(c=>c.sessions));
+  mkHBar('chart-conv',     chArr.map(c=>safe(c.orders,c.sessions)*100), v=>v.toFixed(2).replace('.',',')+'%');
+  mkHBar('chart-tkm',      chArr.map(c=>safe(c.revenue_brl,c.orders)), fmtBRLfull);
+  mkHBar('chart-rps',      chArr.map(c=>safe(c.revenue_brl,c.sessions)), fmtBRL2);
+
+  // — Time series 4 métricas —
+  const mkLineTS = (id,fn,fmt) => mkChart(id,{
+    type:'line',
+    data:{labels:dlabels,datasets:SLUG_ORDER.filter(s=>byChannel[s]).map(s=>({
+      label:byChannel[s].name,
+      data:dates.map(d=>{const dd=byDate[d]?.[s]; return dd?fn(dd):null;}),
+      borderColor:SLUG_COLOR[s]||'#94a3b8',backgroundColor:'transparent',
+      tension:.3,pointRadius:0,borderWidth:1.8,spanGaps:true,
     }))},
-    options:{
-      responsive:true,maintainAspectRatio:false,
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}},
+      scales:{x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0}},y:{ticks:{callback:v=>fmt(v),font:{size:10}},grid:{color:'#f1f4f8'}}}}
+  });
+  mkLineTS('chart-sessions-ts', d=>d.sessions,   fmtInt);
+  mkLineTS('chart-conv-ts',     d=>safe(d.orders,d.sessions)*100, v=>v.toFixed(2).replace('.',',')+'%');
+  mkLineTS('chart-tkm-ts',      d=>safe(d.revenue_brl,d.orders),  v=>fmtBRL(v));
+  mkLineTS('chart-rps-ts',      d=>safe(d.revenue_brl,d.sessions),v=>fmtBRL2(v));
+
+  // — Captação de Leads (mock) —
+  const leadsDaily = {
+    'Popup Site':      Array.from({length:dates.length},()=>Math.round(rand(180,340))),
+    'Form Footer':     Array.from({length:dates.length},()=>Math.round(rand(40,90))),
+    'Form Checkout':   Array.from({length:dates.length},()=>Math.round(rand(60,140))),
+    'Landing Page':    Array.from({length:dates.length},()=>Math.round(rand(80,200))),
+    'WhatsApp Opt-in': Array.from({length:dates.length},()=>Math.round(rand(50,120))),
+  };
+  const leadsTotalDay = Array.from({length:dates.length},(_,i)=>Object.values(leadsDaily).reduce((s,a)=>s+a[i],0));
+  const leadsMTD = leadsTotalDay.reduce((a,b)=>a+b,0);
+  document.getElementById('leads-mtd').textContent  = fmtInt(leadsMTD);
+  document.getElementById('leads-avg').textContent  = fmtInt(Math.round(leadsMTD/dates.length));
+  document.getElementById('leads-peak').textContent = fmtInt(Math.max(...leadsTotalDay))+' leads';
+  mkChart('chart-leads-daily',{type:'bar',
+    data:{labels:dlabels,datasets:Object.keys(leadsDaily).map((k,i)=>({
+      label:k,data:leadsDaily[k],backgroundColor:['#2563eb','#10b981','#8b5cf6','#ec4899','#f59e0b'][i],stack:'l',borderRadius:2,
+    }))},
+    options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmtInt(c.parsed.y)+' leads'}}},
-      scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:9},maxRotation:0}},y:{stacked:true,ticks:{callback:v=>fmtInt(v),font:{size:10}},grid:{color:'#f1f4f8'}}}
-    }
+      scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:9},maxRotation:0}},y:{stacked:true,ticks:{callback:v=>fmtInt(v),font:{size:10}},grid:{color:'#f1f4f8'}}}}
   });
 
-  // ===== Formulários e Popups =====
-  const forms = [
-    {name:'Popup Site (Welcome 10% OFF)',     type:'Popup',     placement:'Home (exit-intent)',  views:rand(85000,120000)},
-    {name:'Popup Site (Newsletter)',           type:'Popup',     placement:'PDP (scroll 50%)',    views:rand(45000,65000)},
-    {name:'Form Footer Newsletter',            type:'Formulário',placement:'Footer (todas páginas)',views:rand(180000,240000)},
-    {name:'Form Checkout (opt-in WhatsApp)',   type:'Formulário',placement:'Checkout',            views:rand(28000,42000)},
-    {name:'Landing Page Lançamento Coleção',   type:'Landing',   placement:'Campanha Paid Social',views:rand(15000,28000)},
-    {name:'WhatsApp Opt-in (Pós-compra)',      type:'Formulário',placement:'Thank-you Page',      views:rand(8500,14000)},
-    {name:'Popup Carrinho Abandonado',         type:'Popup',     placement:'Carrinho',            views:rand(22000,38000)}
-  ].map(f=>{
-    const signupRate = rand(0.018,0.085);
-    const inscritos = Math.round(f.views * signupRate);
-    return {...f, views:Math.round(f.views), signupRate, inscritos};
-  });
+  // — Formulários (mock) —
+  const forms=[
+    {name:'Popup Site (Welcome 10% OFF)',    type:'Popup',     placement:'Home (exit-intent)',    views:rand(85000,120000)},
+    {name:'Popup Site (Newsletter)',         type:'Popup',     placement:'PDP (scroll 50%)',       views:rand(45000,65000)},
+    {name:'Form Footer Newsletter',          type:'Formulário',placement:'Footer (todas páginas)',views:rand(180000,240000)},
+    {name:'Form Checkout (opt-in WhatsApp)', type:'Formulário',placement:'Checkout',              views:rand(28000,42000)},
+    {name:'Landing Page Lançamento Coleção', type:'Landing',   placement:'Campanha Paid Social',  views:rand(15000,28000)},
+    {name:'WhatsApp Opt-in (Pós-compra)',    type:'Formulário',placement:'Thank-you Page',         views:rand(8500,14000)},
+    {name:'Popup Carrinho Abandonado',       type:'Popup',     placement:'Carrinho',              views:rand(22000,38000)},
+  ].map(f=>{const sr=rand(0.018,0.085);return{...f,views:Math.round(f.views),signupRate:sr,inscritos:Math.round(f.views*sr)};});
+  const tvw=forms.reduce((s,f)=>s+f.views,0), tins=forms.reduce((s,f)=>s+f.inscritos,0);
+  document.getElementById('signup-rate-avg').textContent  = fmtPct1(tins/tvw);
+  document.getElementById('form-views-total').textContent = fmtInt(tvw);
+  const rArr=forms.map(f=>f.signupRate), iArr=forms.map(f=>f.inscritos);
+  document.getElementById('table-forms').innerHTML=`
+    <thead><tr><th>Formulário / Popup</th><th>Tipo</th><th>Posicionamento</th>
+    <th class="num">Visualizações</th><th class="num">Inscritos</th><th class="num">Taxa de Cadastro</th></tr></thead>
+    <tbody>${forms.map(f=>`<tr>
+      <td><strong>${f.name}</strong></td><td><span class="tag blue">${f.type}</span></td>
+      <td style="color:var(--muted)">${f.placement}</td>
+      <td class="num">${fmtInt(f.views)}</td>
+      <td class="num"><span class="heat" style="background:${heatColor(f.inscritos,Math.min(...iArr),Math.max(...iArr))}">${fmtInt(f.inscritos)}</span></td>
+      <td class="num"><span class="heat" style="background:${heatColor(f.signupRate,Math.min(...rArr),Math.max(...rArr))}">${fmtPct1(f.signupRate)}</span></td>
+    </tr>`).join('')}</tbody>`;
 
-  const totalViews = forms.reduce((s,f)=>s+f.views,0);
-  const totalInscritos = forms.reduce((s,f)=>s+f.inscritos,0);
-  document.getElementById('signup-rate-avg').textContent = fmtPct1(totalInscritos/totalViews);
-  document.getElementById('form-views-total').textContent = fmtInt(totalViews);
+  // — Funil CRM —
+  renderFunnel('funnel-crm',{sessions:total.sessions,atc:total.add_to_cart,bco:total.begin_checkout,purchases:total.orders});
+  renderGauge('chart-gauge',0);
+  document.getElementById('projection').textContent  = fmtBRLfull(total.revenue_brl);
+  document.getElementById('pace-status').innerHTML   = '<span class="tag blue">Metas disponíveis em breve</span>';
 
-  const ratesArr = forms.map(f=>f.signupRate);
-  const minRate = Math.min(...ratesArr), maxRate = Math.max(...ratesArr);
-  const inscArr = forms.map(f=>f.inscritos);
-  const minI = Math.min(...inscArr), maxI = Math.max(...inscArr);
-
-  document.getElementById('table-forms').innerHTML = `
-    <thead><tr>
-      <th>Formulário / Popup</th><th>Tipo</th><th>Posicionamento</th>
-      <th class="num">Visualizações</th><th class="num">Inscritos</th><th class="num">Taxa de Cadastro</th>
-    </tr></thead>
-    <tbody>${forms.map(f=>`
-      <tr>
-        <td><strong>${f.name}</strong></td>
-        <td><span class="tag blue">${f.type}</span></td>
-        <td style="color:var(--muted)">${f.placement}</td>
-        <td class="num">${fmtInt(f.views)}</td>
-        <td class="num"><span class="heat" style="background:${heatColor(f.inscritos,minI,maxI)}">${fmtInt(f.inscritos)}</span></td>
-        <td class="num"><span class="heat" style="background:${heatColor(f.signupRate,minRate,maxRate)}">${fmtPct1(f.signupRate)}</span></td>
-      </tr>
-    `).join('')}</tbody>`;
-
-  renderFunnel('funnel-crm', t30);
-  renderGauge('chart-gauge', pctTotal);
-  const paceProj = (t30.rev/30)*30;
-  document.getElementById('projection').textContent = fmtBRLfull(paceProj);
-  document.getElementById('pace-status').innerHTML = paceProj>=metaTotal
-    ? '<span class="tag green">Acima da meta</span>'
-    : '<span class="tag yellow">Abaixo da meta · '+fmtBRLfull(metaTotal-paceProj)+' faltam</span>';
-
+  // — Saúde da Base (mock) —
   document.getElementById('health-email').innerHTML = renderHealth([
     {name:'Taxa de Entrega',val:'98,4%',status:'green'},
     {name:'Bounce Rate (Hard+Soft)',val:'1,6%',status:'green'},
     {name:'Spam Complaint Rate',val:'0,08%',status:'green'},
     {name:'Opt-out Rate',val:'0,32%',status:'yellow'},
-    {name:'Base Ativa (engajada 90d)',val:'184.230',status:'green'}
+    {name:'Base Ativa (engajada 90d)',val:'184.230',status:'green'},
   ]);
 }
 
 function renderFunnel(id, d){
-  const taxaAtc = d.atc/d.sessions;
-  const taxaBco = d.bco/d.atc;
-  const taxaCp  = d.purchases/d.bco;
-  const taxaGeral = d.purchases/d.sessions;
+  const safe = (a,b) => b>0?a/b:0;
+  const taxaAtc = safe(d.atc, d.sessions);
+  const taxaBco = safe(d.bco, d.atc);
+  const taxaCp  = safe(d.purchases, d.bco);
+  const taxaGeral = safe(d.purchases, d.sessions);
   document.getElementById(id).innerHTML = `
     <div class="funnel-step" style="background:linear-gradient(90deg,#2563eb,#3b82f6)">
       <span class="step-label">Sessões</span><span class="step-value">${fmtInt(d.sessions)}</span>
@@ -860,7 +909,7 @@ function renderChannel(key){
 
   renderFunnel('funnel-'+key, s);
 
-  new Chart(document.getElementById('chart-rev-'+key),{
+  mkChart('chart-rev-'+key,{
     type:'line',
     data:{labels:DAILY[key].map((_,i)=>'D-'+(30-i)),datasets:[{
       label:'Receita',data:DAILY[key].map(d=>d.rev),
@@ -876,7 +925,7 @@ function renderChannel(key){
     return d.rev / Math.max(dayBase,1);
   });
   const effLabel = cfg.topPerInscrito ? 'Receita por Inscrito' : 'Receita por Disparo';
-  new Chart(document.getElementById('chart-eff-'+key),{
+  mkChart('chart-eff-'+key,{
     type:'line',
     data:{labels:DAILY[key].map((_,i)=>'D-'+(30-i)),datasets:[{
       label:effLabel,data:dailyEff,
@@ -1194,9 +1243,23 @@ function updateAssetFilter(page){
   } else { sel.disabled = true; }
 }
 
-function applyFilters(){
+async function applyFilters(){
+  const period = document.getElementById('f-period').value;
+  if (period === 'custom') {
+    const s = document.getElementById('f-date-start').value;
+    const e = document.getElementById('f-date-end').value;
+    if (!s || !e) {
+      alert('Preencha as datas de início e fim.');
+      return;
+    }
+  }
+  // Garante que está na aba Resumo para ver os dados
+  if (!document.getElementById('page-resumo').classList.contains('active')) {
+    document.querySelector('.tab-btn[data-page="resumo"]').click();
+  }
+  await renderResumo();
   const flash = document.createElement('div');
-  flash.textContent = '✓ Filtros aplicados';
+  flash.textContent = '✓ Dados atualizados';
   flash.style.cssText = 'position:fixed;top:20px;right:20px;background:var(--success);color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:1000';
   document.body.appendChild(flash);
   setTimeout(()=>flash.remove(),1800);
@@ -1207,6 +1270,9 @@ function resetFilters(){
   document.getElementById('f-channel').value='all';
   document.getElementById('f-customer').value='all';
   document.getElementById('f-asset').value='all';
+  document.getElementById('f-date-start').value='';
+  document.getElementById('f-date-end').value='';
+  onPeriodChange();
 }
 
 document.getElementById('f-channel').addEventListener('change',e=>{
@@ -1215,7 +1281,7 @@ document.getElementById('f-channel').addEventListener('change',e=>{
   else { document.querySelector(`.tab-btn[data-page="${v}"]`).click(); }
 });
 
-renderResumo();
+renderResumo(); // async — carrega dados do Supabase
 updateAssetFilter('resumo');
 </script>
 </body>
