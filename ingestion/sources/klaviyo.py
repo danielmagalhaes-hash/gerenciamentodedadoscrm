@@ -24,12 +24,12 @@ REQUEST_THROTTLE_SECS = 0.15  # pausa entre requisições para evitar rate limit
 
 # Nomes exatos dos eventos de e-mail no Klaviyo
 METRIC_FIELDS: dict[str, str] = {
-    "sends": "Sent Email",
+    "sends": "Received Email",
     "opens": "Opened Email",
     "clicks": "Clicked Email",
     "bounces": "Bounced Email",
-    "spam_complaints": "Marked as Spam",
-    "unsubscribes": "Unsubscribed",
+    "spam_complaints": "Marked Email as Spam",
+    "unsubscribes": "Unsubscribed from Email Marketing",
 }
 
 # Tipos de ação de fluxo que representam envio de e-mail
@@ -176,7 +176,7 @@ def fetch_campaign_messages(client: httpx.Client, campaign_id: str) -> list[Klav
 def _fetch_metric_ids(client: httpx.Client) -> dict[str, str]:
     target_names = set(METRIC_FIELDS.values())
     mapping: dict[str, str] = {}
-    for item in _paginate(client, "/metrics/", {"fields[metric]": "name", "page[size]": "200"}):
+    for item in _paginate(client, "/metrics/", {"fields[metric]": "name"}):
         name = item["attributes"].get("name", "")
         if name in target_names:
             mapping[name] = item["id"]
@@ -184,7 +184,7 @@ def _fetch_metric_ids(client: httpx.Client) -> dict[str, str]:
 
 
 def _aggregate_metric(client: httpx.Client, metric_id: str, since: date) -> dict[tuple[str, str], int]:
-    """Retorna {(message_id, date_str): count} para um único tipo de evento."""
+    """Retorna {(message_id, date_iso): count} para um único tipo de evento."""
     until = date.today()
     body = {"data": {"type": "metric-aggregate", "attributes": {
         "metric_id": metric_id,
@@ -195,18 +195,19 @@ def _aggregate_metric(client: httpx.Client, metric_id: str, since: date) -> dict
             f"greater-or-equal(datetime,{since.isoformat()}T00:00:00+00:00)",
             f"less-than(datetime,{until.isoformat()}T23:59:59+00:00)",
         ],
-        "group_by": ["$message"],
-        "sort": "datetime",
+        "by": ["$message"],
     }}}
     result = _post(client, "/metric-aggregates/", body)
     counts: dict[tuple[str, str], int] = {}
     attrs = result["data"]["attributes"]
-    dates: list[str] = attrs.get("dates", [])
+    # dates vêm como "2026-05-12T00:00:00+00:00" — extraímos só a data
+    raw_dates: list[str] = attrs.get("dates", [])
+    date_strs = [d[:10] for d in raw_dates]
     for row in attrs.get("data", []):
         msg_id = row["dimensions"][0]
         for i, count in enumerate(row["measurements"].get("count", [])):
-            if count and i < len(dates):
-                counts[(msg_id, dates[i])] = int(count)
+            if count and i < len(date_strs):
+                counts[(msg_id, date_strs[i])] = int(count)
     return counts
 
 

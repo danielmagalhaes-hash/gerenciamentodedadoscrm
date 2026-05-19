@@ -11,10 +11,31 @@ from ingestion.models.klaviyo_models import (
     KlaviyoFlowMessage,
     KlaviyoForm,
 )
+from ingestion.models.sheets_models import SessionRow, SessionUtmRow
+from ingestion.models.shopify_models import ShopifyOrder
 
 logger = logging.getLogger(__name__)
 
 ACTIVE_CAMPAIGN_STATUSES = {"Sent", "Sending", "Scheduled"}
+
+# Mapeamento utm_source+utm_medium → channel_slug (last-click, R4)
+# Valores reais vindos da planilha Shopify (app de atribuição)
+_UTM_TO_CHANNEL_SLUG: dict[tuple[str | None, str | None], str] = {
+    ("email", "email_fluxo"): "email_flow",
+    ("email", "fluxos_crm"): "email_flow",
+    ("email", "email_campanha"): "email_campaign",
+    ("whatsapp", "whatsapp_fluxo"): "wpp_flow",
+    ("whatsapp", "whatsapp_fluxo_ia"): "wpp_flow",
+    ("whatsapp", "fluxos_crm"): "wpp_flow",
+    ("whatsapp", "whatsapp_campanha"): "wpp_campaign",
+    ("whatsapp", "comunidade"): "wpp_community",
+    # Formato padrão dim_channels (usado por outras fontes)
+    ("email", "flow"): "email_flow",
+    ("email", "campaign"): "email_campaign",
+    ("whatsapp", "flow"): "wpp_flow",
+    ("whatsapp", "campaign"): "wpp_campaign",
+    ("community", None): "wpp_community",
+}
 
 
 def _now_iso() -> str:
@@ -33,6 +54,7 @@ def get_asset_map(sb: Client) -> dict[str, str]:
         sb.table("dim_assets")
         .select("id,external_id")
         .eq("source_tool", "klaviyo")
+        .limit(10000)
         .execute()
     )
     return {row["external_id"]: row["id"] for row in resp.data}
@@ -44,9 +66,37 @@ def get_asset_item_map(sb: Client) -> dict[str, str]:
         sb.table("dim_asset_items")
         .select("id,external_id")
         .eq("type", "email")
+        .limit(10000)
         .execute()
     )
     return {row["external_id"]: row["id"] for row in resp.data}
+
+
+def upsert_orders(sb: Client, orders: list[ShopifyOrder], channel_ids: dict[str, str]) -> int:
+    if not orders:
+        return 0
+    now = _now_iso()
+    records = []
+    for o in orders:
+        slug = _UTM_TO_CHANNEL_SLUG.get((o.utm_source, o.utm_medium))
+        channel_id = channel_ids.get(slug) if slug else None
+        records.append({
+            "order_id": o.order_id,
+            "order_date": o.order_date.isoformat(),
+            "customer_email": o.customer_email,
+            "revenue_brl": str(o.revenue_brl),
+            "is_first_purchase": o.is_first_purchase,
+            "attributed_channel_id": channel_id,
+            "utm_source": o.utm_source,
+            "utm_medium": o.utm_medium,
+            "utm_campaign": o.utm_campaign,
+            "data_source": "shopify",
+            "ingested_at": now,
+        })
+    sb.table("fact_orders").upsert(records, on_conflict="order_id").execute()
+    unattributed = sum(1 for r in records if not r["attributed_channel_id"])
+    logger.info({"event": "orders_upserted", "count": len(records), "unattributed": unattributed})
+    return len(records)
 
 
 def upsert_flow_assets(sb: Client, flows: list[KlaviyoFlow], channel_ids: dict[str, str]) -> int:
@@ -213,3 +263,88 @@ def upsert_email_health(
     sb.table("fact_email_health").upsert([record], on_conflict="date,channel_id").execute()
     logger.info({"event": "email_health_upserted", "active_base_count": active_base_count})
     return 1
+
+
+def upsert_sessions(sb: Client, rows: list[SessionRow], channel_ids: dict[str, str]) -> int:
+    if not rows:
+        return 0
+    now = _now_iso()
+    records = []
+    skipped = 0
+    for r in rows:
+        channel_id = channel_ids.get(r.channel_slug)
+        if not channel_id:
+            logger.warning({"event": "session_channel_not_found", "slug": r.channel_slug})
+            skipped += 1
+            continue
+        # GA4 pode retornar begin_checkout > add_to_cart (checkout direto sem ATC)
+        # Clampamos para manter o invariante do banco: sessions >= atc >= bco >= 0
+        atc = min(r.add_to_cart, r.sessions)
+        bco = min(r.begin_checkout, atc)
+        if atc != r.add_to_cart or bco != r.begin_checkout:
+            logger.warning({
+                "event": "sessions_funnel_clamped",
+                "date": r.date.isoformat(),
+                "channel_slug": r.channel_slug,
+                "original": {"atc": r.add_to_cart, "bco": r.begin_checkout},
+                "clamped": {"atc": atc, "bco": bco},
+            })
+        records.append({
+            "date": r.date.isoformat(),
+            "channel_id": channel_id,
+            "sessions": r.sessions,
+            "add_to_cart": atc,
+            "begin_checkout": bco,
+            "ingested_at": now,
+        })
+    if skipped:
+        logger.warning({"event": "sessions_skipped", "skipped": skipped})
+    if not records:
+        return 0
+    sb.table("fact_sessions").upsert(records, on_conflict="date,channel_id").execute()
+    logger.info({"event": "sessions_upserted", "count": len(records)})
+    return len(records)
+
+
+def upsert_sessions_utm(sb: Client, rows: list[SessionUtmRow], channel_ids: dict[str, str]) -> int:
+    if not rows:
+        return 0
+    now = _now_iso()
+    records = []
+    skipped = 0
+    for r in rows:
+        channel_id = channel_ids.get(r.channel_slug)
+        if not channel_id:
+            skipped += 1
+            continue
+        atc = min(r.add_to_cart, r.sessions)
+        bco = min(r.begin_checkout, atc)
+        records.append({
+            "date": r.date.isoformat(),
+            "channel_id": channel_id,
+            "utm_source": r.utm_source,
+            "utm_medium": r.utm_medium,
+            "utm_campaign": r.utm_campaign,
+            "utm_term": r.utm_term,
+            "utm_content": r.utm_content,
+            "sessions": r.sessions,
+            "add_to_cart": atc,
+            "begin_checkout": bco,
+            "ingested_at": now,
+        })
+    if skipped:
+        logger.warning({"event": "sessions_utm_skipped", "skipped": skipped})
+    if not records:
+        return 0
+    # Upsert em lotes de 1000 para evitar limite de payload do Supabase
+    batch_size = 1000
+    total = 0
+    for i in range(0, len(records), batch_size):
+        batch = records[i:i + batch_size]
+        sb.table("fact_sessions_utm").upsert(
+            batch,
+            on_conflict="date,channel_id,utm_source,utm_medium,utm_campaign,utm_term,utm_content"
+        ).execute()
+        total += len(batch)
+    logger.info({"event": "sessions_utm_upserted", "count": total})
+    return total

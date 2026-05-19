@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from ingestion.db.client import get_supabase_client
 from ingestion.db import writers
 from ingestion.sources import klaviyo as klaviyo_source
+from ingestion.sources import google_sheets as sheets_source
+from ingestion.sources import shopify as shopify_source
 
 load_dotenv()
 logging.basicConfig(
@@ -17,6 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 KLAVIYO_DAYS_LOOKBACK = 30
+SHOPIFY_DAYS_LOOKBACK = 60
 
 
 def run_klaviyo_ingestion() -> None:
@@ -66,12 +69,38 @@ def run_klaviyo_ingestion() -> None:
     logger.info("=== Klaviyo: ingestão finalizada ===")
 
 
+def run_shopify_ingestion() -> None:
+    logger.info("=== Shopify: início da ingestão ===")
+    since = date.today() - timedelta(days=SHOPIFY_DAYS_LOOKBACK)
+    sb = get_supabase_client()
+    channel_ids = writers.get_channel_ids(sb)
+    orders = shopify_source.fetch_paid_orders_since(since)
+    writers.upsert_orders(sb, orders, channel_ids)
+    logger.info("=== Shopify: ingestão finalizada ===")
+
+
+def run_sheets_ingestion() -> None:
+    logger.info("=== Google Sheets: início da ingestão ===")
+    sb = get_supabase_client()
+    channel_ids = writers.get_channel_ids(sb)
+    session_rows, utm_rows = sheets_source.fetch_sessions_and_utm()
+    writers.upsert_sessions(sb, session_rows, channel_ids)
+    writers.upsert_sessions_utm(sb, utm_rows, channel_ids)
+    logger.info("=== Google Sheets: ingestão finalizada ===")
+
+
 def main() -> None:
-    try:
-        run_klaviyo_ingestion()
-    except Exception as e:
-        logger.error({"event": "klaviyo_ingestion_failed", "error": str(e)})
-        raise
+    sources = [
+        ("klaviyo", run_klaviyo_ingestion),
+        ("shopify", run_shopify_ingestion),
+        ("sheets", run_sheets_ingestion),
+    ]
+    for name, fn in sources:
+        try:
+            fn()
+        except Exception as e:
+            logger.error({"event": f"{name}_ingestion_failed", "error": str(e)})
+            raise
 
 
 if __name__ == "__main__":
