@@ -7,7 +7,7 @@ from pydantic import BaseModel
 class ShopifyOrder(BaseModel):
     order_id: str
     order_date: date
-    customer_email: str
+    customer_email: str = ""
     revenue_brl: Decimal
     is_first_purchase: bool
     utm_source: str | None = None
