@@ -19,13 +19,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-KLAVIYO_DAYS_LOOKBACK = 30
 SHOPIFY_DAYS_LOOKBACK = 60
+METRICS_WINDOW_DAYS = 7  # após 7 dias do envio, métricas de um e-mail não mudam
 
 
-def run_klaviyo_ingestion(klaviyo_days: int = KLAVIYO_DAYS_LOOKBACK) -> None:
+def run_klaviyo_ingestion(klaviyo_days: int | None = None) -> None:
     logger.info("=== Klaviyo: início da ingestão ===")
-    since = date.today() - timedelta(days=klaviyo_days)
+    today = date.today()
 
     sb = get_supabase_client()
     client = klaviyo_source.make_client()
@@ -49,14 +49,40 @@ def run_klaviyo_ingestion(klaviyo_days: int = KLAVIYO_DAYS_LOOKBACK) -> None:
     writers.upsert_flow_asset_items(sb, flow_messages, asset_map)
 
     # 5. Sincroniza mensagens de campanhas → dim_asset_items
+    # Campanhas enviadas são imutáveis: pula as que já têm mensagens no banco
+    synced_campaign_ids = writers.get_synced_campaign_ids(sb)
+    new_campaigns = [c for c in campaigns if c.id not in synced_campaign_ids]
+    logger.info({
+        "event": "campaigns_to_sync",
+        "total": len(campaigns),
+        "new": len(new_campaigns),
+        "already_synced": len(synced_campaign_ids),
+    })
     campaign_messages = []
-    for campaign in campaigns:
+    for campaign in new_campaigns:
         campaign_messages.extend(klaviyo_source.fetch_campaign_messages(client, campaign.id))
     writers.upsert_campaign_asset_items(sb, campaign_messages, asset_map)
 
     # 6. Sincroniza métricas de e-mail → fact_email_sends
+    # Regra: métricas são válidas apenas durante os 7 dias após o envio.
+    # "since" = data de envio mais antiga entre campanhas ainda na janela ativa.
+    # Para backfill (ex: puxar fevereiro pela primeira vez), passar --klaviyo-days N.
+    if klaviyo_days is not None:
+        metrics_since = today - timedelta(days=klaviyo_days)
+        logger.info({"event": "metrics_backfill_forced", "since": metrics_since.isoformat()})
+    else:
+        active_campaigns = [
+            c for c in campaigns
+            if c.send_time and (c.send_time.date() + timedelta(days=METRICS_WINDOW_DAYS)) >= today
+        ]
+        metrics_since = min(
+            (c.send_time.date() for c in active_campaigns),
+            default=today - timedelta(days=METRICS_WINDOW_DAYS),
+        )
+        logger.info({"event": "metrics_since_auto", "since": metrics_since.isoformat(), "active_campaigns": len(active_campaigns)})
+
     item_map = writers.get_asset_item_map(sb)
-    metric_rows = klaviyo_source.fetch_email_metrics_since(client, since)
+    metric_rows = klaviyo_source.fetch_email_metrics_since(client, metrics_since)
     writers.upsert_email_sends(sb, metric_rows, item_map)
 
     # 7. Sincroniza formulários → dim_forms
@@ -93,8 +119,11 @@ def run_sheets_ingestion() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Roda a ingestão de dados do CRM")
     parser.add_argument(
-        "--klaviyo-days", type=int, default=KLAVIYO_DAYS_LOOKBACK,
-        help=f"Dias de lookback para ingestão Klaviyo (padrão: {KLAVIYO_DAYS_LOOKBACK})",
+        "--klaviyo-days", type=int, default=None,
+        help=(
+            "Força backfill de métricas a partir de N dias atrás. "
+            "Padrão: automático — apenas campanhas dentro da janela de 7 dias após o envio."
+        ),
     )
     args = parser.parse_args()
 

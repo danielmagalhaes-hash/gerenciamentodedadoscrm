@@ -150,12 +150,15 @@ def fetch_flow_messages(client: httpx.Client, flow_id: str) -> list[KlaviyoFlowM
     return messages
 
 
+CAMPAIGNS_SINCE = "2026-02-01T00:00:00+00:00"
+
+
 def fetch_campaigns(client: httpx.Client) -> list[KlaviyoCampaign]:
     logger.info("klaviyo: buscando campanhas")
     result = []
     for item in _paginate(client, "/campaigns/", {
         "fields[campaign]": "name,status,created_at,send_time",
-        "filter": "equals(messages.channel,'email'),equals(archived,false)",
+        "filter": f"equals(messages.channel,'email'),greater-or-equal(created_at,{CAMPAIGNS_SINCE})",
     }):
         a = item["attributes"]
         result.append(KlaviyoCampaign.model_validate({

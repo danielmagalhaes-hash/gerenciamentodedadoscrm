@@ -72,6 +72,62 @@ def get_asset_item_map(sb: Client) -> dict[str, str]:
     return {row["external_id"]: row["id"] for row in resp.data}
 
 
+def get_synced_campaign_ids(sb: Client) -> set[str]:
+    """Retorna external_ids de campanhas que já têm mensagens em dim_asset_items.
+
+    Campanhas enviadas são imutáveis — se já temos as mensagens no banco,
+    não precisamos re-buscar na API do Klaviyo.
+    """
+    items_resp = (
+        sb.table("dim_asset_items")
+        .select("asset_id")
+        .eq("type", "email")
+        .limit(10000)
+        .execute()
+    )
+    asset_ids_with_items = {row["asset_id"] for row in items_resp.data}
+    if not asset_ids_with_items:
+        return set()
+    assets_resp = (
+        sb.table("dim_assets")
+        .select("external_id")
+        .eq("type", "campaign")
+        .eq("source_tool", "klaviyo")
+        .in_("id", list(asset_ids_with_items))
+        .limit(10000)
+        .execute()
+    )
+    return {row["external_id"] for row in assets_resp.data}
+
+
+def get_synced_campaign_ids(sb: Client) -> set[str]:
+    """Retorna external_ids de campanhas que já têm mensagens em dim_asset_items.
+
+    Campanhas enviadas são imutáveis — se já temos as mensagens, não precisamos
+    buscar novamente na API do Klaviyo.
+    """
+    items_resp = (
+        sb.table("dim_asset_items")
+        .select("asset_id")
+        .eq("type", "email")
+        .limit(10000)
+        .execute()
+    )
+    asset_ids_with_items = {row["asset_id"] for row in items_resp.data}
+    if not asset_ids_with_items:
+        return set()
+    assets_resp = (
+        sb.table("dim_assets")
+        .select("external_id")
+        .eq("type", "campaign")
+        .eq("source_tool", "klaviyo")
+        .in_("id", list(asset_ids_with_items))
+        .limit(10000)
+        .execute()
+    )
+    return {row["external_id"] for row in assets_resp.data}
+
+
 def upsert_orders(sb: Client, orders: list[ShopifyOrder], channel_ids: dict[str, str]) -> int:
     if not orders:
         return 0
