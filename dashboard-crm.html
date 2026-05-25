@@ -112,13 +112,49 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
 .preview-msg{background:#dcf8c6;padding:10px 12px;border-radius:8px;font-size:12px;color:#1f2937;max-width:340px;margin-top:4px;line-height:1.5;white-space:pre-wrap}
 .preview-email{background:#fff;border:1px solid #e5e7eb;padding:12px;border-radius:6px;font-size:12px;margin-top:4px}
 .preview-email b{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;font-weight:600}
+/* ====== Login overlay ====== */
+#login-overlay{position:fixed;inset:0;background:rgba(15,27,45,.72);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center}
+.login-card{background:#fff;border-radius:14px;padding:40px 36px;width:360px;max-width:92vw;box-shadow:0 20px 60px rgba(15,27,45,.22)}
+.login-card h2{font-size:20px;font-weight:700;margin-bottom:4px}
+.login-card p{font-size:12px;color:var(--muted);margin-bottom:24px;line-height:1.5}
+.login-card input{width:100%;border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box}
+.login-card input:focus{border-color:var(--primary)}
+.login-card .btn-login{width:100%;padding:11px;font-size:14px;font-weight:600;background:var(--primary);color:#fff;border:none;border-radius:7px;cursor:pointer}
+.login-card .btn-login:disabled{opacity:.55;cursor:default}
+#login-msg{margin-top:12px;font-size:12px;text-align:center;min-height:16px;line-height:1.5}
+#login-msg.ok{color:var(--success)}
+#login-msg.err{color:var(--danger)}
+/* ====== Sync status ====== */
+#sync-status{font-size:11px;color:var(--muted);white-space:nowrap}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;animation:spin .9s linear infinite}
 </style>
 </head>
 <body>
 
+<!-- ====== Auth loading (cobre tudo enquanto verifica sessão) ====== -->
+<div id="auth-loading" style="position:fixed;inset:0;background:#f4f6fa;z-index:9998;display:flex;align-items:center;justify-content:center;font-size:14px;color:#6b7785">Verificando acesso…</div>
+
+<!-- ====== Login overlay ====== -->
+<div id="login-overlay" style="display:none">
+  <div class="login-card">
+    <h2>CRM Dashboard</h2>
+    <p>Acesso restrito a <strong>@minimalclub.com.br</strong> e <strong>@moonventures.com</strong>.<br>
+       Insira seu e-mail para receber o link de acesso.</p>
+    <input id="login-email" type="email" placeholder="seu@minimalclub.com.br" autocomplete="email">
+    <button class="btn-login" id="btn-login" onclick="sendMagicLink()">Entrar com e-mail</button>
+    <div id="login-msg"></div>
+  </div>
+</div>
+
 <header>
   <div class="brand">CRM <span>Dashboard</span></div>
-  <div class="user">Daniel Magalhães · Minimal Club</div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span id="sync-status"></span>
+    <button class="btn btn-ghost" id="btn-sync" onclick="triggerSync()" style="font-size:11px;padding:5px 12px;display:none">↻ Sincronizar</button>
+    <span class="user" id="user-display" style="display:none"></span>
+    <button class="btn btn-ghost" id="btn-signout" onclick="signOut()" style="font-size:11px;padding:5px 10px;display:none">Sair</button>
+  </div>
 </header>
 
 <div class="filters">
@@ -362,6 +398,167 @@ const _sb = supabase.createClient(
   'https://aczvusdzfrmborvvfqib.supabase.co',
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenZ1c2R6ZnJtYm9ydnZmcWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3ODkwNTIsImV4cCI6MjA5NDM2NTA1Mn0.hb0RjoXdmHN7wKLvhRCkJjq-ycqxE3FaJlYKtMEqumk'
 );
+
+// =========================================
+// CONFIGURAÇÃO DE SYNC (preencher após deploy no Railway)
+// =========================================
+// Cole aqui a URL pública do seu serviço no Railway (ex: https://xxx.up.railway.app)
+const RAILWAY_SYNC_URL = '';
+// Cole aqui o mesmo valor de SYNC_SECRET_TOKEN configurado no Railway
+const SYNC_SECRET_TOKEN = '';
+
+// =========================================
+// AUTENTICAÇÃO — Supabase Auth (magic link)
+// =========================================
+const ALLOWED_DOMAINS = ['@minimalclub.com.br', '@moonventures.com'];
+const REDIRECT_URL = 'https://gerenciamentodedadoscrm.vercel.app/';
+
+let _dashboardReady = false; // evita duplo render
+
+function _isAllowedEmail(email) {
+  return ALLOWED_DOMAINS.some(d => email.toLowerCase().endsWith(d));
+}
+
+function _stopAuthLoading() {
+  document.getElementById('auth-loading').style.display = 'none';
+}
+
+function _showLoginOverlay(msg, isError) {
+  _stopAuthLoading();
+  document.getElementById('login-overlay').style.display = 'flex';
+  document.getElementById('btn-sync').style.display = 'none';
+  document.getElementById('btn-signout').style.display = 'none';
+  document.getElementById('user-display').style.display = 'none';
+  if (msg) {
+    const el = document.getElementById('login-msg');
+    el.textContent = msg;
+    el.className = isError ? 'err' : 'ok';
+  }
+}
+
+function _enterDashboard(email) {
+  if (_dashboardReady) return; // já carregado — não renderiza de novo
+  _dashboardReady = true;
+  _stopAuthLoading();
+  document.getElementById('login-overlay').style.display = 'none';
+  if (RAILWAY_SYNC_URL) document.getElementById('btn-sync').style.display = '';
+  const ud = document.getElementById('user-display');
+  ud.textContent = email;
+  ud.style.display = '';
+  document.getElementById('btn-signout').style.display = '';
+  _refreshLastUpdate();
+  renderResumo();
+}
+
+async function sendMagicLink() {
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) return;
+  if (!_isAllowedEmail(email)) {
+    const el = document.getElementById('login-msg');
+    el.textContent = 'E-mail não autorizado. Use @minimalclub.com.br ou @moonventures.com.';
+    el.className = 'err';
+    return;
+  }
+  const btn = document.getElementById('btn-login');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+  const { error } = await _sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: REDIRECT_URL }
+  });
+  btn.disabled = false;
+  btn.textContent = 'Entrar com e-mail';
+  const el = document.getElementById('login-msg');
+  if (error) {
+    el.textContent = 'Erro ao enviar: ' + error.message;
+    el.className = 'err';
+  } else {
+    el.textContent = '✓ Link enviado! Verifique sua caixa de entrada.';
+    el.className = 'ok';
+  }
+}
+
+async function signOut() {
+  _dashboardReady = false;
+  await _sb.auth.signOut();
+}
+
+async function checkAuth() {
+  const { data: { session } } = await _sb.auth.getSession();
+  if (!session) { _showLoginOverlay(); return; }
+  const email = session.user.email || '';
+  if (!_isAllowedEmail(email)) {
+    await _sb.auth.signOut();
+    _showLoginOverlay('E-mail não autorizado. Use @minimalclub.com.br ou @moonventures.com.', true);
+    return;
+  }
+  _enterDashboard(email);
+}
+
+_sb.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'SIGNED_IN' && session) {
+    const email = session.user.email || '';
+    if (!_isAllowedEmail(email)) {
+      await _sb.auth.signOut();
+      _showLoginOverlay('E-mail não autorizado. Use @minimalclub.com.br ou @moonventures.com.', true);
+      return;
+    }
+    _enterDashboard(email);
+  }
+  if (event === 'SIGNED_OUT') {
+    _showLoginOverlay();
+  }
+});
+
+// =========================================
+// SINCRONIZAÇÃO SOB DEMANDA
+// =========================================
+async function _refreshLastUpdate() {
+  try {
+    const { data } = await _sb.from('fact_orders')
+      .select('ingested_at').order('ingested_at', { ascending: false }).limit(1);
+    if (data && data[0]) {
+      const dt = new Date(data[0].ingested_at);
+      const mins = Math.round((Date.now() - dt.getTime()) / 60000);
+      const label = mins < 60 ? `há ${mins} min` : `há ${Math.round(mins/60)}h`;
+      document.getElementById('sync-status').textContent = `Dados: ${label}`;
+    }
+  } catch (_) {}
+}
+
+async function triggerSync() {
+  if (!RAILWAY_SYNC_URL || !SYNC_SECRET_TOKEN) {
+    alert('Configure RAILWAY_SYNC_URL e SYNC_SECRET_TOKEN no topo do script.');
+    return;
+  }
+  const btn = document.getElementById('btn-sync');
+  const status = document.getElementById('sync-status');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">↻</span> Sincronizando...';
+  status.textContent = 'Conectando ao Railway...';
+  try {
+    const res = await fetch(`${RAILWAY_SYNC_URL}/sync?token=${SYNC_SECRET_TOKEN}`, { method: 'POST' });
+    const json = await res.json();
+    if (json.status === 'sync_started') {
+      status.textContent = 'Ingestão iniciada — aguarde ~2 min...';
+      // Depois de 2 min, atualiza os dados do Supabase automaticamente
+      setTimeout(async () => {
+        btn.disabled = false;
+        btn.innerHTML = '↻ Sincronizar';
+        await applyFilters();
+        _refreshLastUpdate();
+      }, 120000);
+    } else {
+      status.textContent = json.message || json.status;
+      btn.disabled = false;
+      btn.innerHTML = '↻ Sincronizar';
+    }
+  } catch (e) {
+    status.textContent = 'Erro ao conectar ao Railway.';
+    btn.disabled = false;
+    btn.innerHTML = '↻ Sincronizar';
+  }
+}
 
 // =========================================
 // FORMATAÇÃO
@@ -1463,7 +1660,7 @@ document.getElementById('f-customer').addEventListener('change', async () => {
   if(activePage === 'resumo') { _drawResumo(); }
   else if(activePage && CHANNELS[activePage]) { await renderChannel(activePage); renderedChannels.add(activePage); }
 });
-renderResumo(); // async — carrega dados do Supabase
+checkAuth(); // verifica sessão → mostra overlay ou carrega dashboard
 updateAssetFilter('resumo');
 </script>
 </body>

@@ -1,9 +1,13 @@
 """Scheduler de ingestão contínua.
 
-Intervalos:
+Intervalos automáticos:
   - Shopify (receita):  a cada 30 minutos
   - Google Sheets (sessões): a cada hora
   - Klaviyo (e-mail):   1× por dia às 03:00
+
+Endpoint HTTP (trigger manual):
+  POST /sync?token=SYNC_SECRET_TOKEN  → smart sync (só dados novos)
+  GET  /health                        → healthcheck
 
 Uso:
   python -m ingestion.scheduler
@@ -14,6 +18,8 @@ import time
 
 import schedule
 from dotenv import load_dotenv
+
+from ingestion.sync_server import start_sync_server
 
 load_dotenv()
 
@@ -49,11 +55,19 @@ def _klaviyo() -> None:
     _run("klaviyo", run_klaviyo_ingestion)
 
 
+def _smart_sync() -> None:
+    from ingestion.main import run_smart_ingestion
+    _run("smart_sync", run_smart_ingestion)
+
+
+# Inicia servidor HTTP para trigger manual (POST /sync)
+start_sync_server(_smart_sync)
+
 schedule.every(30).minutes.do(_shopify)
 schedule.every(1).hour.do(_sheets)
 schedule.every().day.at("03:00").do(_klaviyo)
 
-logger.info("Scheduler iniciado — Shopify: 30min | Sheets: 1h | Klaviyo: 03:00 diário")
+logger.info("Scheduler iniciado — Shopify: 30min | Sheets: 1h | Klaviyo: 03:00 diário | Sync HTTP: ativo")
 
 # Executa uma vez imediatamente ao subir
 _shopify()

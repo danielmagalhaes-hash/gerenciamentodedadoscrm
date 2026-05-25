@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 SHOPIFY_DAYS_LOOKBACK = 60
 METRICS_WINDOW_DAYS = 7  # após 7 dias do envio, métricas de um e-mail não mudam
+SHOPIFY_BUFFER_DAYS = 2  # janela de buffer para pedidos com atraso no Shopify
 
 
 def run_klaviyo_ingestion(klaviyo_days: int | None = None) -> None:
@@ -114,6 +115,86 @@ def run_sheets_ingestion() -> None:
     writers.upsert_sessions(sb, session_rows, channel_ids)
     writers.upsert_sessions_utm(sb, utm_rows, channel_ids)
     logger.info("=== Google Sheets: ingestão finalizada ===")
+
+
+def run_smart_ingestion() -> None:
+    """Ingestão inteligente: busca apenas os dados que ainda não estão no banco.
+
+    Regra por fonte:
+      - Shopify: a partir de MAX(order_date) - 2 dias (buffer para pedidos tardios)
+      - Klaviyo: a partir de MAX(date) em fact_email_sends + 1 dia
+      - Sessions: igual ao run normal (Google Sheets entrega tudo; upsert garante idempotência)
+    """
+    logger.info("=== Smart sync: início ===")
+    sb = get_supabase_client()
+    latest = writers.get_latest_dates(sb)
+    today = date.today()
+
+    # — Shopify smart —
+    logger.info("=== Shopify (smart): início ===")
+    channel_ids = writers.get_channel_ids(sb)
+    if latest["orders"]:
+        since_shopify = latest["orders"] - timedelta(days=SHOPIFY_BUFFER_DAYS)
+        since_shopify = max(since_shopify, today - timedelta(days=SHOPIFY_DAYS_LOOKBACK))
+    else:
+        since_shopify = today - timedelta(days=SHOPIFY_DAYS_LOOKBACK)
+    logger.info({"event": "smart_shopify_since", "since": since_shopify.isoformat()})
+    orders = shopify_source.fetch_paid_orders_since(since_shopify)
+    writers.upsert_orders(sb, orders, channel_ids)
+    logger.info("=== Shopify (smart): finalizado ===")
+
+    # — Klaviyo smart —
+    logger.info("=== Klaviyo (smart): início ===")
+    client = klaviyo_source.make_client()
+    flows = klaviyo_source.fetch_flows(client)
+    writers.upsert_flow_assets(sb, flows, channel_ids)
+    campaigns = klaviyo_source.fetch_campaigns(client)
+    writers.upsert_campaign_assets(sb, campaigns, channel_ids)
+    asset_map = writers.get_asset_map(sb)
+    flow_messages = []
+    for flow in flows:
+        flow_messages.extend(klaviyo_source.fetch_flow_messages(client, flow.id))
+    writers.upsert_flow_asset_items(sb, flow_messages, asset_map)
+    synced_campaign_ids = writers.get_synced_campaign_ids(sb)
+    new_campaigns = [c for c in campaigns if c.id not in synced_campaign_ids]
+    campaign_messages = []
+    for campaign in new_campaigns:
+        campaign_messages.extend(klaviyo_source.fetch_campaign_messages(client, campaign.id))
+    writers.upsert_campaign_asset_items(sb, campaign_messages, asset_map)
+
+    if latest["email_sends"]:
+        # só busca métricas de datas ainda não cobertas
+        metrics_since = latest["email_sends"] + timedelta(days=1)
+        # se o banco já está atualizado (hoje ou ontem), não há nada a buscar
+        if metrics_since > today:
+            logger.info({"event": "email_metrics_skip", "reason": "banco já atualizado"})
+        else:
+            logger.info({"event": "smart_klaviyo_since", "since": metrics_since.isoformat()})
+            item_map = writers.get_asset_item_map(sb)
+            metric_rows = klaviyo_source.fetch_email_metrics_since(client, metrics_since)
+            writers.upsert_email_sends(sb, metric_rows, item_map)
+    else:
+        # primeira carga: busca 30 dias
+        metrics_since = today - timedelta(days=30)
+        logger.info({"event": "smart_klaviyo_first_run", "since": metrics_since.isoformat()})
+        item_map = writers.get_asset_item_map(sb)
+        metric_rows = klaviyo_source.fetch_email_metrics_since(client, metrics_since)
+        writers.upsert_email_sends(sb, metric_rows, item_map)
+
+    forms = klaviyo_source.fetch_forms(client)
+    writers.upsert_forms(sb, forms)
+    active_count = klaviyo_source.fetch_active_base_count(client)
+    writers.upsert_email_health(sb, active_count, today, channel_ids)
+    logger.info("=== Klaviyo (smart): finalizado ===")
+
+    # — Sessions (sempre completo — upsert é idempotente e o Sheets já tem só dados novos) —
+    logger.info("=== Google Sheets (smart): início ===")
+    session_rows, utm_rows = sheets_source.fetch_sessions_and_utm()
+    writers.upsert_sessions(sb, session_rows, channel_ids)
+    writers.upsert_sessions_utm(sb, utm_rows, channel_ids)
+    logger.info("=== Google Sheets (smart): finalizado ===")
+
+    logger.info("=== Smart sync: concluído ===")
 
 
 def main() -> None:

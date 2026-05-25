@@ -128,6 +128,22 @@ def get_synced_campaign_ids(sb: Client) -> set[str]:
     return {row["external_id"] for row in assets_resp.data}
 
 
+def get_latest_dates(sb: Client) -> dict[str, date | None]:
+    """Retorna a data mais recente em cada tabela fact — usada pelo sync inteligente."""
+    def _latest(table: str, col: str) -> date | None:
+        resp = sb.table(table).select(col).order(col, desc=True).limit(1).execute()
+        if resp.data and resp.data[0].get(col):
+            raw = resp.data[0][col]
+            return date.fromisoformat(str(raw)[:10])
+        return None
+
+    return {
+        "orders":      _latest("fact_orders",      "order_date"),
+        "email_sends": _latest("fact_email_sends",  "date"),
+        "sessions":    _latest("fact_sessions",     "date"),
+    }
+
+
 def upsert_orders(sb: Client, orders: list[ShopifyOrder], channel_ids: dict[str, str]) -> int:
     if not orders:
         return 0
