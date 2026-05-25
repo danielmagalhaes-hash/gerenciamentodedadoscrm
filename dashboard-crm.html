@@ -411,6 +411,9 @@ const SYNC_SECRET_TOKEN = '';
 // =========================================
 // AUTENTICAÇÃO — Supabase Auth (magic link)
 // =========================================
+// Para reativar o login: mudar AUTH_ENABLED para true
+const AUTH_ENABLED = false;
+
 const ALLOWED_DOMAINS = ['@minimalclub.com.br', '@moonventures.com'];
 const REDIRECT_URL = 'https://gerenciamentodedadoscrm.vercel.app/';
 
@@ -443,10 +446,12 @@ function _enterDashboard(email) {
   _stopAuthLoading();
   document.getElementById('login-overlay').style.display = 'none';
   if (RAILWAY_SYNC_URL) document.getElementById('btn-sync').style.display = '';
-  const ud = document.getElementById('user-display');
-  ud.textContent = email;
-  ud.style.display = '';
-  document.getElementById('btn-signout').style.display = '';
+  if (email) {
+    const ud = document.getElementById('user-display');
+    ud.textContent = email;
+    ud.style.display = '';
+    document.getElementById('btn-signout').style.display = '';
+  }
   _refreshLastUpdate();
   renderResumo();
 }
@@ -485,6 +490,7 @@ async function signOut() {
 }
 
 async function checkAuth() {
+  if (!AUTH_ENABLED) { _enterDashboard(''); return; }
   const { data: { session } } = await _sb.auth.getSession();
   if (!session) { _showLoginOverlay(); return; }
   const email = session.user.email || '';
