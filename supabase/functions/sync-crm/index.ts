@@ -4,7 +4,6 @@
  *
  * Segredos necessários (Supabase Dashboard → Settings → Edge Functions):
  *   KLAVIYO_PRIVATE_API_KEY
- *   KLAVIYO_SEGMENT_ENGAGED_90D  (opcional)
  *   SHOPIFY_SHEETS_CSV_URL
  *   GOOGLE_SHEETS_CSV_URL
  */
@@ -462,20 +461,6 @@ async function syncKlaviyo(
   }
   if (formRecords.length) {
     await sb.from("dim_forms").upsert(formRecords, { onConflict: "external_id" });
-  }
-
-  // 7. Base ativa
-  const segmentId = Deno.env.get("KLAVIYO_SEGMENT_ENGAGED_90D") ?? "";
-  if (segmentId) {
-    // deno-lint-ignore no-explicit-any
-    const seg = (await klaviyoGet(`/segments/${segmentId}/`, { "additional-fields[segment]": "profile_count" }, key)) as any;
-    const activeCount = seg.data?.attributes?.profile_count ?? 0;
-    await sb.from("fact_email_health").upsert([{
-      date: today.toISOString().slice(0, 10),
-      channel_id: channelIds["email_flow"],
-      active_subscribers: activeCount,
-      ingested_at: now,
-    }], { onConflict: "date,channel_id" });
   }
 
   console.log(`Klaviyo: ${flows.length} fluxos, ${campaigns.length} campanhas, ${metricsCount} linhas de métricas`);
