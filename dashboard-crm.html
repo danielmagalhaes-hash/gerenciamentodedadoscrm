@@ -1027,7 +1027,7 @@ function renderFunnel(id, d){
 }
 
 function renderGauge(id, pct){
-  new Chart(document.getElementById(id),{
+  mkChart(id,{
     type:'doughnut',
     data:{datasets:[{
       data:[pct*100, Math.max(100-pct*100,0)],
