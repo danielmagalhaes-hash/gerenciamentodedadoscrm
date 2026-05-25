@@ -537,7 +537,11 @@ async function triggerSync() {
   status.textContent = 'Buscando dados novos...';
   try {
     const { data, error } = await _sb.functions.invoke('sync-crm');
-    if (error) throw error;
+    if (error) {
+      let msg = error.message || String(error);
+      try { const body = await error.context?.json(); if (body?.message) msg = body.message; } catch(_) {}
+      throw new Error(msg);
+    }
     if (data && data.status === 'ok') {
       const k = data.klaviyo ?? {};
       const s = data.shopify ?? {};

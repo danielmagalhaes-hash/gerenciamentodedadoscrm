@@ -579,6 +579,15 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   try {
+    const required = ["KLAVIYO_PRIVATE_API_KEY", "SHOPIFY_SHEETS_CSV_URL", "GOOGLE_SHEETS_CSV_URL"];
+    const missing = required.filter((v) => !Deno.env.get(v));
+    if (missing.length) {
+      return new Response(
+        JSON.stringify({ status: "error", message: `Segredos não configurados no Supabase: ${missing.join(", ")}` }),
+        { status: 500, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
     const sb = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
