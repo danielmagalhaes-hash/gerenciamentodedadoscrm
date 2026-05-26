@@ -1136,21 +1136,21 @@ function channelHTML(key){
     <div class="section-title">Ranking de Ativos · ${ch.name}</div>
     <div class="grid grid-2">
       <div class="card">
-        <div class="card-title">Top 5 Melhores · por Receita</div>
+        <div class="card-title">Top 5 Melhores · por ${ch.type==='email'?'Disparos':'Receita'}</div>
         <div id="rank-best-${key}"></div>
       </div>
       <div class="card">
-        <div class="card-title">Top 5 Piores · por Receita</div>
+        <div class="card-title">Top 5 Piores · por ${ch.type==='email'?'Disparos':'Receita'}</div>
         <div id="rank-worst-${key}"></div>
       </div>
     </div>
     <div class="grid grid-2" style="margin-top:14px">
       <div class="card">
-        <div class="card-title">Top 5 Melhores · por ${cfg.rankingLabel}</div>
+        <div class="card-title">Top 5 Melhores · por ${ch.type==='email'?'CTOR':cfg.rankingLabel}</div>
         <div id="rank-best-eff-${key}"></div>
       </div>
       <div class="card">
-        <div class="card-title">Top 5 Piores · por ${cfg.rankingLabel}</div>
+        <div class="card-title">Top 5 Piores · por ${ch.type==='email'?'CTOR':cfg.rankingLabel}</div>
         <div id="rank-worst-eff-${key}"></div>
       </div>
     </div>
