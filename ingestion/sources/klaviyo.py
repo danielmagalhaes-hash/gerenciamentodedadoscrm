@@ -206,11 +206,15 @@ def _fetch_metric_ids(client: httpx.Client) -> dict[str, str]:
 
 
 def _aggregate_metric(client: httpx.Client, metric_id: str, since: date) -> dict[tuple[str, str], int]:
-    """Retorna {(message_id, date_iso): count} para um único tipo de evento."""
+    """Retorna {(message_id, date_iso): unique_count} para um único tipo de evento.
+
+    Usa 'unique' em vez de 'count' para contar perfis únicos por dia,
+    alinhando com o que o dashboard do Klaviyo exibe (aberturas/cliques únicos).
+    """
     until = date.today()
     body = {"data": {"type": "metric-aggregate", "attributes": {
         "metric_id": metric_id,
-        "measurements": ["count"],
+        "measurements": ["unique"],
         "interval": "day",
         "page_size": 500,
         "filter": [
@@ -227,7 +231,7 @@ def _aggregate_metric(client: httpx.Client, metric_id: str, since: date) -> dict
     date_strs = [d[:10] for d in raw_dates]
     for row in attrs.get("data", []):
         msg_id = row["dimensions"][0]
-        for i, count in enumerate(row["measurements"].get("count", [])):
+        for i, count in enumerate(row["measurements"].get("unique", [])):
             if count and i < len(date_strs):
                 counts[(msg_id, date_strs[i])] = int(count)
     return counts
@@ -258,11 +262,11 @@ def fetch_email_metrics_since(client: httpx.Client, since: date) -> list[Klaviyo
 
 
 def _aggregate_metric_by_form(client: httpx.Client, metric_id: str, since: date) -> dict[tuple[str, str], int]:
-    """Retorna {(form_external_id, date_iso): count} para um único tipo de evento de formulário."""
+    """Retorna {(form_external_id, date_iso): unique_count} para um único tipo de evento de formulário."""
     until = date.today()
     body = {"data": {"type": "metric-aggregate", "attributes": {
         "metric_id": metric_id,
-        "measurements": ["count"],
+        "measurements": ["unique"],
         "interval": "day",
         "page_size": 500,
         "filter": [
@@ -278,7 +282,7 @@ def _aggregate_metric_by_form(client: httpx.Client, metric_id: str, since: date)
     date_strs = [d[:10] for d in raw_dates]
     for row in attrs.get("data", []):
         form_id = row["dimensions"][0]
-        for i, count in enumerate(row["measurements"].get("count", [])):
+        for i, count in enumerate(row["measurements"].get("unique", [])):
             if count and i < len(date_strs):
                 counts[(form_id, date_strs[i])] = int(count)
     return counts
