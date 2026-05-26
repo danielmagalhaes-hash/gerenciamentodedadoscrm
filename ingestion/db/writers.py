@@ -10,6 +10,7 @@ from ingestion.models.klaviyo_models import (
     KlaviyoFlow,
     KlaviyoFlowMessage,
     KlaviyoForm,
+    KlaviyoFormMetricRow,
 )
 from ingestion.models.sheets_models import SessionRow, SessionUtmRow
 from ingestion.models.shopify_models import ShopifyOrder
@@ -138,9 +139,10 @@ def get_latest_dates(sb: Client) -> dict[str, date | None]:
         return None
 
     return {
-        "orders":      _latest("fact_orders",      "order_date"),
-        "email_sends": _latest("fact_email_sends",  "date"),
-        "sessions":    _latest("fact_sessions",     "date"),
+        "orders":        _latest("fact_orders",        "order_date"),
+        "email_sends":   _latest("fact_email_sends",   "date"),
+        "sessions":      _latest("fact_sessions",      "date"),
+        "form_captures": _latest("fact_lead_captures", "date"),
     }
 
 
@@ -309,6 +311,45 @@ def upsert_email_sends(
         return 0
     sb.table("fact_email_sends").upsert(records, on_conflict="date,asset_item_id").execute()
     logger.info({"event": "email_sends_upserted", "count": len(records)})
+    return len(records)
+
+
+def get_form_id_map(sb: Client) -> dict[str, str]:
+    """Retorna {external_id: uuid} de todos os formulários em dim_forms."""
+    resp = sb.table("dim_forms").select("id,external_id").limit(10000).execute()
+    return {row["external_id"]: row["id"] for row in resp.data}
+
+
+def upsert_form_captures(
+    sb: Client, rows: list[KlaviyoFormMetricRow], form_id_map: dict[str, str]
+) -> int:
+    if not rows:
+        return 0
+    now = _now_iso()
+    records = []
+    skipped = 0
+    for r in rows:
+        form_id = form_id_map.get(r.form_external_id)
+        if not form_id:
+            skipped += 1
+            continue
+        records.append({
+            "date": r.date.isoformat(),
+            "form_id": form_id,
+            "impressions": r.impressions,
+            "submissions": r.submissions,
+            "ingested_at": now,
+        })
+    if skipped:
+        logger.warning({
+            "event": "form_captures_skipped",
+            "skipped": skipped,
+            "reason": "form_external_id não encontrado em dim_forms",
+        })
+    if not records:
+        return 0
+    sb.table("fact_lead_captures").upsert(records, on_conflict="date,form_id").execute()
+    logger.info({"event": "form_captures_upserted", "count": len(records)})
     return len(records)
 
 

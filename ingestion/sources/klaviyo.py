@@ -13,6 +13,7 @@ from ingestion.models.klaviyo_models import (
     KlaviyoCampaignMessage,
     KlaviyoEmailMetricRow,
     KlaviyoForm,
+    KlaviyoFormMetricRow,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,12 @@ METRIC_FIELDS: dict[str, str] = {
     "bounces": "Bounced Email",
     "spam_complaints": "Marked Email as Spam",
     "unsubscribes": "Unsubscribed from Email Marketing",
+}
+
+# Nomes exatos dos eventos de formulário no Klaviyo
+FORM_METRIC_FIELDS: dict[str, str] = {
+    "impressions": "Viewed Form",
+    "submissions": "Submitted Form",
 }
 
 # Tipos de ação de fluxo que representam envio de e-mail
@@ -189,7 +196,7 @@ def fetch_campaign_messages(client: httpx.Client, campaign_id: str) -> list[Klav
 
 
 def _fetch_metric_ids(client: httpx.Client) -> dict[str, str]:
-    target_names = set(METRIC_FIELDS.values())
+    target_names = set(METRIC_FIELDS.values()) | set(FORM_METRIC_FIELDS.values())
     mapping: dict[str, str] = {}
     for item in _paginate(client, "/metrics/", {"fields[metric]": "name"}):
         name = item["attributes"].get("name", "")
@@ -247,6 +254,57 @@ def fetch_email_metrics_since(client: httpx.Client, since: date) -> list[Klaviyo
 
     result = list(rows.values())
     logger.info({"event": "email_metrics_fetched", "rows": len(result)})
+    return result
+
+
+def _aggregate_metric_by_form(client: httpx.Client, metric_id: str, since: date) -> dict[tuple[str, str], int]:
+    """Retorna {(form_external_id, date_iso): count} para um único tipo de evento de formulário."""
+    until = date.today()
+    body = {"data": {"type": "metric-aggregate", "attributes": {
+        "metric_id": metric_id,
+        "measurements": ["count"],
+        "interval": "day",
+        "page_size": 500,
+        "filter": [
+            f"greater-or-equal(datetime,{since.isoformat()}T00:00:00+00:00)",
+            f"less-than(datetime,{until.isoformat()}T23:59:59+00:00)",
+        ],
+        "by": ["form_id"],
+    }}}
+    result = _post(client, "/metric-aggregates/", body)
+    counts: dict[tuple[str, str], int] = {}
+    attrs = result["data"]["attributes"]
+    raw_dates: list[str] = attrs.get("dates", [])
+    date_strs = [d[:10] for d in raw_dates]
+    for row in attrs.get("data", []):
+        form_id = row["dimensions"][0]
+        for i, count in enumerate(row["measurements"].get("count", [])):
+            if count and i < len(date_strs):
+                counts[(form_id, date_strs[i])] = int(count)
+    return counts
+
+
+def fetch_form_metrics_since(client: httpx.Client, since: date) -> list[KlaviyoFormMetricRow]:
+    logger.info({"event": "form_metrics_start", "since": since.isoformat()})
+    metric_ids = _fetch_metric_ids(client)
+    rows: dict[tuple[str, str], KlaviyoFormMetricRow] = {}
+
+    for field, metric_name in FORM_METRIC_FIELDS.items():
+        metric_id = metric_ids.get(metric_name)
+        if not metric_id:
+            logger.warning({"event": "metric_not_found", "metric_name": metric_name})
+            continue
+        counts = _aggregate_metric_by_form(client, metric_id, since)
+        for (form_id, date_str), count in counts.items():
+            key = (form_id, date_str)
+            if key not in rows:
+                rows[key] = KlaviyoFormMetricRow(
+                    form_external_id=form_id, date=date.fromisoformat(date_str)
+                )
+            setattr(rows[key], field, count)
+
+    result = list(rows.values())
+    logger.info({"event": "form_metrics_fetched", "rows": len(result)})
     return result
 
 

@@ -94,6 +94,18 @@ def run_klaviyo_ingestion(klaviyo_days: int | None = None) -> None:
     active_count = klaviyo_source.fetch_active_base_count(client)
     writers.upsert_email_health(sb, active_count, date.today(), channel_ids)
 
+    # 9. Sincroniza métricas de formulários → fact_lead_captures
+    # Janela padrão: 90 dias (formulários ficam ativos por longos períodos)
+    # Backfill: --klaviyo-days N também se aplica aqui
+    form_metrics_since = (
+        today - timedelta(days=klaviyo_days)
+        if klaviyo_days is not None
+        else today - timedelta(days=90)
+    )
+    form_id_map = writers.get_form_id_map(sb)
+    form_metric_rows = klaviyo_source.fetch_form_metrics_since(client, form_metrics_since)
+    writers.upsert_form_captures(sb, form_metric_rows, form_id_map)
+
     logger.info("=== Klaviyo: ingestão finalizada ===")
 
 
@@ -185,6 +197,23 @@ def run_smart_ingestion() -> None:
     writers.upsert_forms(sb, forms)
     active_count = klaviyo_source.fetch_active_base_count(client)
     writers.upsert_email_health(sb, active_count, today, channel_ids)
+
+    # Métricas de formulários — incremental a partir do último dia registrado
+    form_id_map = writers.get_form_id_map(sb)
+    if latest.get("form_captures"):
+        form_metrics_since = latest["form_captures"] + timedelta(days=1)
+        if form_metrics_since > today:
+            logger.info({"event": "form_metrics_skip", "reason": "banco já atualizado"})
+        else:
+            logger.info({"event": "smart_form_metrics_since", "since": form_metrics_since.isoformat()})
+            form_metric_rows = klaviyo_source.fetch_form_metrics_since(client, form_metrics_since)
+            writers.upsert_form_captures(sb, form_metric_rows, form_id_map)
+    else:
+        form_metrics_since = today - timedelta(days=90)
+        logger.info({"event": "smart_form_metrics_first_run", "since": form_metrics_since.isoformat()})
+        form_metric_rows = klaviyo_source.fetch_form_metrics_since(client, form_metrics_since)
+        writers.upsert_form_captures(sb, form_metric_rows, form_id_map)
+
     logger.info("=== Klaviyo (smart): finalizado ===")
 
     # — Sessions (sempre completo — upsert é idempotente e o Sheets já tem só dados novos) —

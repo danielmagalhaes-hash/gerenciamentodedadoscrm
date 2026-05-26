@@ -52,37 +52,35 @@ O resultado: dados de Shopify, Klaviyo, Vekta, Sendflow e GA4 aparecem unificado
 - **Quem depende:** `scheduler`
 - **Estado:** planejado
 
-#### scheduler
-- **Responsabilidade:** Orquestrar a execução de todos os módulos de ingestão a cada 30 minutos
-- **Depende de:** todos os módulos `ingestion-*`
-- **Quem depende:** Railway (hospeda e executa)
-- **Estado:** planejado
+#### sync-crm (Edge Function)
+- **Responsabilidade:** Sincronizar Shopify, Sessões (Google Sheets) e métricas Klaviyo sob demanda
+- **Depende de:** Supabase Edge Functions (Deno), CSVs do Shopify e Google Sheets, Klaviyo API
+- **Quem depende:** botão "Sincronizar" no dashboard
+- **Estado:** ativo — cada fonte roda de forma independente (erro em uma não bloqueia as outras)
 
 #### supabase-schema
 - **Responsabilidade:** Definir e versionar o schema do banco (tabelas, views, RLS, índices) via migrations SQL
 - **Depende de:** nada
 - **Quem depende:** todos os módulos de ingestão e o dashboard
-- **Estado:** planejado
+- **Estado:** ativo
 
 #### dashboard-frontend
-- **Responsabilidade:** Renderizar os dados do Supabase no dashboard HTML existente, substituindo os dados mock
+- **Responsabilidade:** Renderizar os dados do Supabase no dashboard HTML existente
 - **Depende de:** Supabase API REST (views `vw_*`), `supabase-js`
 - **Quem depende:** nada (camada final)
-- **Estado:** frontend pronto — integração com Supabase planejada
+- **Estado:** ativo
 
 ### Diagrama (ASCII)
 
 ```
-[Shopify API]    → [ingestion-shopify]  →┐
-[Klaviyo API]    → [ingestion-klaviyo]  →│
-[Vekta API]      → [ingestion-vekta]   →├→ [writers.py] → [Supabase PostgreSQL]
-[Sendflow API]   → [ingestion-sendflow] →│                       │
-[Google Sheets]  → [ingestion-sheets]  →┘                  [views vw_*]
-                                                                  │
-[Input manual]   ──────────────────────────→ [fact_monthly_goals]│
-                                                                  ↓
-                               [scheduler.py no Railway]   [dashboard-crm.html]
-                               (dispara tudo a cada 30min)  (supabase-js lê vw_*)
+[Shopify CSV]    ─────────────────────────┐
+[Google Sheets]  ─────────────────────────┤→ [Edge Function sync-crm] → [Supabase PostgreSQL]
+[Klaviyo API]    ─────────────────────────┘         (botão Sincronizar)        │
+                                                                           [views vw_*]
+[Input manual]   ──────────────────────────→ [fact_monthly_goals]              │
+                                                                                ↓
+                                                                      [dashboard-crm.html]
+                                                                      (supabase-js lê vw_*)
 ```
 
 ---
@@ -440,6 +438,7 @@ Metas mensais de receita — origem: input manual.
 |---|---|---|---|---|
 | 2026-05-14 | Atribuição last-click via UTM | Única regra de atribuição implementável com os dados disponíveis | Atribuição multi-touch exige refatoração completa de `fact_orders` e views | — |
 | 2026-05-14 | Python + Railway para scheduler | Simples de implementar, menor curva de aprendizado, custo baixo | Migração para n8n ou pg_cron exige reescrever scripts de ingestão | — |
+| 2026-05-26 | Railway removido — ingestão via botão (Edge Function sync-crm) | Scheduler no Railway ficou instável; sessões acumulavam gaps. Edge Function já existia e sincroniza todas as fontes quando acionada manualmente | Ingestão automática periódica exigiria pg_cron ou serviço externo confiável | — |
 | 2026-05-14 | Duas tabelas separadas para hierarquia de ativos (`dim_assets` + `dim_asset_items`) | Mais fácil de auditar, tipos bem separados, sem campo nullable confuso | Hierarquia com 3+ níveis exige nova tabela; self-join é mais simples para isso | — |
 | 2026-05-14 | BigQuery → Google Sheets → Supabase para dados de sessão | Acesso direto ao BigQuery não disponível na V1 | Migração para BigQuery direto exige service account e refatoração do módulo `ingestion-sheets` | — |
 | 2026-05-14 | Frontend em HTML puro (sem Next.js ou framework) | Dashboard já construído e aprovado; não há motivo para reescrever | Funcionalidades interativas avançadas (real-time, formulários complexos) exigirão framework | — |

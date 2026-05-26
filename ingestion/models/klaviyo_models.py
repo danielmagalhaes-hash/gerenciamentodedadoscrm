@@ -56,3 +56,10 @@ class KlaviyoForm(BaseModel):
     form_type: str = "form"
     created_at: datetime
     updated_at: datetime
+
+
+class KlaviyoFormMetricRow(BaseModel):
+    form_external_id: str
+    date: date
+    impressions: int = 0
+    submissions: int = 0
