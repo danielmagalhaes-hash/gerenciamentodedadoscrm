@@ -1299,8 +1299,30 @@ async function renderChannel(key){
       scales:{x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0}},y:{ticks:{callback:v=>fmtBRL(v)},grid:{color:'#f1f4f8'}}}}
   });
 
-  // Gráfico de eficiência: disparos+aberturas reais (e-mail) ou mock (WPP)
-  if(isEmail){
+  // Gráfico de eficiência: Receita/Disparo (ec) ou Disparos+Aberturas (ef)
+  if(isEmail && !cfg.topPerInscrito){
+    // E-mail Campanha: Receita por Disparo diário
+    const revPerDisp = dates.map(d => {
+      const sends = +emByDay[d]?.sends || 0;
+      const rev   = byDay[d]?.revenue_brl || 0;
+      return sends > 0 ? rev / sends : null;
+    });
+    mkChart('chart-eff-'+key,{
+      type:'line',
+      data:{labels:dlabels,datasets:[{
+        label:'Receita / Disparo',
+        data:revPerDisp,
+        borderColor:ch.color, backgroundColor:ch.color+'22',
+        fill:true, tension:.35, pointRadius:2, pointBackgroundColor:ch.color, borderWidth:2,
+        spanGaps:false,
+      }]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'R$/disparo: '+fmtBRL2(c.parsed.y)}}},
+        scales:{x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0}},
+                y:{ticks:{callback:v=>fmtBRL2(v),font:{size:10}},grid:{color:'#f1f4f8'}}}}
+    });
+  } else if(isEmail){
+    // E-mail Fluxo: Disparos + Aberturas
     mkChart('chart-eff-'+key,{
       type:'line',
       data:{labels:dlabels,datasets:[
