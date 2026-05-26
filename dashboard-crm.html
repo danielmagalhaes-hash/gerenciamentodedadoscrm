@@ -968,10 +968,11 @@ function _drawResumo() {
   document.getElementById('leads-peak').textContent       = fmtInt(leadsTotalDay.length>0 ? Math.max(0,...leadsTotalDay) : 0)+' leads';
   document.getElementById('signup-rate-avg').textContent  = periodViews>0 ? fmtPct1(leadsMTD/periodViews) : '—';
   document.getElementById('form-views-total').textContent = fmtInt(periodViews);
-  mkChart('chart-leads-daily',{type:'bar',
+  mkChart('chart-leads-daily',{type:'line',
     data:{labels:dlabels,datasets:[{
       label:'Novos inscritos',data:leadsTotalDay,
-      backgroundColor:'#2563eb',borderRadius:3,
+      borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,0.08)',
+      fill:true,tension:.3,pointRadius:2,borderWidth:2,
     }]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},
