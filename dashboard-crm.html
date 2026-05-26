@@ -767,7 +767,7 @@ const CONV   = 0.0244;
 // =========================================
 let _resumoRows = [], _resumoRevByType = [],
     _resumoCompRows = [], _resumoCompRevByType = [],
-    _resumoLeadsDaily = [], _resumoFormPerf = [],
+    _resumoLeadsDaily = [],
     _resumoStart = '', _resumoEnd = '', _resumoCompStart = '', _resumoCompEnd = '';
 
 async function renderResumo() {
@@ -783,13 +783,12 @@ async function renderResumo() {
     '<div style="grid-column:1/-1;color:var(--muted);padding:20px;text-align:center">Carregando dados...</div>';
 
   try {
-    [_resumoRows, _resumoRevByType, _resumoCompRows, _resumoCompRevByType, _resumoLeadsDaily, _resumoFormPerf] = await Promise.all([
+    [_resumoRows, _resumoRevByType, _resumoCompRows, _resumoCompRevByType, _resumoLeadsDaily] = await Promise.all([
       fetchChannelData(start, end),
       fetchRevenueByType(start, end),
       fetchChannelData(comp.start, comp.end),
       fetchRevenueByType(comp.start, comp.end),
       fetchLeadsDaily(start, end),
-      fetchFormPerformance(),
     ]);
   } catch(err) {
     document.getElementById('kpi-topline').innerHTML =
@@ -991,10 +990,20 @@ function _drawResumo() {
     });
   }
 
-  // — Formulários (real — vw_form_performance) —
-  const formPerf = _resumoFormPerf.filter(f => (f.total_submissions||0)>0 || (f.total_impressions||0)>0);
-  const rArr = formPerf.map(f => parseFloat(f.signup_rate||0));
-  const iArr = formPerf.map(f => f.total_submissions||0);
+  // — Formulários — agrega leadsRows por formulário (mesmo período do gráfico) —
+  const formAgg = {};
+  for (const r of leadsRows) {
+    const k = r.form_name;
+    if (!formAgg[k]) formAgg[k] = {form_name:k, form_type:r.form_type, total_impressions:0, total_submissions:0};
+    formAgg[k].total_impressions += (r.impressions||0);
+    formAgg[k].total_submissions += (r.submissions||0);
+  }
+  const formPerf = Object.values(formAgg)
+    .map(f => ({...f, signup_rate: f.total_impressions>0 ? f.total_submissions/f.total_impressions : 0}))
+    .filter(f => f.total_submissions>0 || f.total_impressions>0)
+    .sort((a,b) => b.total_submissions - a.total_submissions);
+  const rArr = formPerf.map(f => f.signup_rate);
+  const iArr = formPerf.map(f => f.total_submissions);
   document.getElementById('table-forms').innerHTML = formPerf.length > 0 ? `
     <thead><tr><th>Formulário / Popup</th><th>Tipo</th>
     <th class="num">Visualizações</th><th class="num">Inscritos</th><th class="num">Taxa de Cadastro</th></tr></thead>
