@@ -830,7 +830,7 @@ function _drawResumo() {
   const compTicket = safe(compTotal.revenue_brl, compTotal.orders);
   const compConv   = safe(compTotal.orders, compTotal.sessions);
   const compRps    = safe(compTotal.revenue_brl, compTotal.sessions);
-  const dlabel = d => d.slice(5).replace('-','/');
+  const dlabel = d => d.slice(8)+'/'+d.slice(5,7);
 
   // — KPIs topline —
   document.getElementById('kpi-topline').innerHTML = [
@@ -1178,7 +1178,7 @@ async function renderChannel(key){
 
   const {start, end} = getDateRange(document.getElementById('f-period').value);
   const customerFilter = document.getElementById('f-customer').value;
-  const dlabel = d => d.slice(5).replace('-','/');
+  const dlabel = d => d.slice(8)+'/'+d.slice(5,7);
   const comp = getComparisonPeriod(start, end);
 
   let allRows = [], revByType = [], allCompRows = [], compRevByType = [];
@@ -1535,7 +1535,7 @@ function renderEmailAssetTable(key, rows, color){
       const rev=+r.revenue_brl||0, rps=+r.revenue_per_send||0;
       const openRate = sends>0 ? (opens/sends*100).toFixed(1)+'%' : '—';
       const ctor     = opens>0 ? (clicks/opens*100).toFixed(1)+'%' : '—';
-      const sendDate = r.send_date ? r.send_date.substring(0,10) : '—';
+      const sendDate = r.send_date ? (d => d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4))(r.send_date.substring(0,10)) : '—';
       const statusDot = r.is_active
         ? '<span class="tag green">Ativo</span>'
         : '<span class="tag" style="background:#f1f4f8;color:var(--muted)">Pausado</span>';
