@@ -1323,14 +1323,13 @@ async function renderChannel(key){
       return (entry && entry.sends > 0) ? entry.rev / entry.sends : null;
     });
     mkChart('chart-eff-'+key,{
-      type:'bar',
+      type:'line',
       data:{labels:dlabels,datasets:[{
         label:'Receita / Disparo',
         data:revPerDisp,
-        backgroundColor:ch.color+'cc',
-        borderColor:ch.color,
-        borderRadius:4,
-        borderWidth:1,
+        borderColor:ch.color, backgroundColor:ch.color+'22',
+        fill:true, tension:.35, pointRadius:3, pointBackgroundColor:ch.color, borderWidth:2,
+        spanGaps:false,
       }]},
       options:{responsive:true,maintainAspectRatio:false,
         plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'R$/disparo: '+fmtBRL2(c.parsed.y)}}},
