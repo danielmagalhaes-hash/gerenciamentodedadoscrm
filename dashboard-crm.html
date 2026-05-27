@@ -700,6 +700,7 @@ async function fetchEmailAssets(slug, start, end) {
   let q = _sb.from('vw_email_asset_metrics')
     .select('asset_name,asset_type,is_active,first_date,last_date,send_date,sends,opens,clicks,bounces,unsubscribes,open_rate_pct,ctor_pct,sends_per_day,revenue_brl,revenue_per_send')
     .eq('channel_slug', slug)
+    .gt('sends', 0)
     .order(isCampaign ? 'send_date' : 'sends', {ascending: false, nullsFirst: false})
     .limit(2000);
   if (isCampaign && start && end) {

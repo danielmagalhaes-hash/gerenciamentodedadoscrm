@@ -169,6 +169,7 @@ def upsert_orders(sb: Client, orders: list[ShopifyOrder], channel_ids: dict[str,
             "utm_medium": o.utm_medium,
             "utm_campaign": o.utm_campaign,
             "utm_content": o.utm_content,
+            "utm_term": o.utm_term,
             "data_source": "shopify",
             "ingested_at": now,
         })
