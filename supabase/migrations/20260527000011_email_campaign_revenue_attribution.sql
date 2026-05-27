@@ -1,12 +1,18 @@
--- Migration: adiciona atribuição de receita por utm_content em vw_email_asset_metrics
--- Reversível: sim (recriar versão anterior sem revenue_brl / revenue_per_send / utm_content_code)
+-- Migration: adiciona atribuição de receita e last_send_date em vw_email_asset_metrics
+-- Reversível: sim (recriar versão anterior sem revenue_brl / revenue_per_send / utm_content_code / last_send_date)
 --
 -- Regra de atribuição:
 --   O nome do e-mail de campanha contém um código entre colchetes, ex: [em1234]
 --   Esse código corresponde ao valor de utm_content nos pedidos do Shopify.
 --   SUM(revenue_brl) de fact_orders WHERE utm_content = código extraído.
+--
+-- last_send_date = último dia em que houve disparos reais (sends > 0).
+-- Diferente de last_date (MAX de qualquer evento), que inclui aberturas/cliques
+-- tardios e sempre mostra a data de hoje para campanhas ativas.
 
-CREATE OR REPLACE VIEW vw_email_asset_metrics AS
+DROP VIEW IF EXISTS vw_email_asset_metrics;
+
+CREATE VIEW vw_email_asset_metrics AS
 SELECT
   da.id                                                                              AS asset_id,
   da.name                                                                            AS asset_name,
@@ -15,6 +21,7 @@ SELECT
   dc.slug                                                                            AS channel_slug,
   MIN(fes.date)                                                                      AS first_date,
   MAX(fes.date)                                                                      AS last_date,
+  MAX(CASE WHEN fes.sends > 0 THEN fes.date END)                                    AS last_send_date,
   SUM(fes.sends)                                                                     AS sends,
   SUM(fes.opens)                                                                     AS opens,
   SUM(fes.clicks)                                                                    AS clicks,
