@@ -336,6 +336,103 @@ async function syncSheets(
   return { sessions: sessionRecords.length, utm: utmRecords.length };
 }
 
+// ── Klaviyo — catálogo de campanhas ───────────────────────────────────────
+// Sincroniza dim_assets + dim_asset_items apenas para campanhas novas.
+// Campanhas já com mensagens no banco são ignoradas (imutáveis após envio).
+
+const CAMPAIGNS_SINCE = "2026-01-01T00:00:00+00:00";
+const ACTIVE_CAMPAIGN_STATUSES = new Set(["Sent", "Sending", "Scheduled"]);
+
+async function syncKlaviyoCampaigns(
+  sb: SupabaseClient,
+  key: string,
+  channelIds: Record<string, string>,
+): Promise<{ campaigns: number; newMessages: number }> {
+  const channelId = channelIds["email_campaign"];
+  if (!channelId) return { campaigns: 0, newMessages: 0 };
+  const now = nowIso();
+
+  // 1. Buscar campanhas de e-mail no Klaviyo desde 2026
+  // deno-lint-ignore no-explicit-any
+  const campaigns: Array<{ id: string; name: string; status: string }> = [];
+  for await (const item of klaviyoPaginate("/campaigns/", {
+    "fields[campaign]": "name,status,created_at,send_time",
+    "filter": `equals(messages.channel,'email'),greater-or-equal(scheduled_at,${CAMPAIGNS_SINCE})`,
+  }, key)) {
+    // deno-lint-ignore no-explicit-any
+    const a = (item as any).attributes;
+    // deno-lint-ignore no-explicit-any
+    campaigns.push({ id: (item as any).id, name: a.name, status: a.status });
+  }
+
+  if (campaigns.length === 0) return { campaigns: 0, newMessages: 0 };
+
+  // 2. Upsert todas as campanhas em dim_assets (atualiza status de existing)
+  const assetRecords = campaigns.map((c) => ({
+    external_id: c.id,
+    channel_id: channelId,
+    name: c.name,
+    type: "campaign",
+    is_active: ACTIVE_CAMPAIGN_STATUSES.has(c.status),
+    source_tool: "klaviyo",
+    ingested_at: now,
+  }));
+  await sb.from("dim_assets").upsert(assetRecords, { onConflict: "external_id,source_tool" });
+
+  // 3. Quais campanhas já têm mensagens no banco?
+  const { data: assetsInDb } = await sb
+    .from("dim_assets")
+    .select("id,external_id")
+    .eq("source_tool", "klaviyo")
+    .eq("type", "campaign");
+  // deno-lint-ignore no-explicit-any
+  const extToAssetId: Record<string, string> = Object.fromEntries(
+    // deno-lint-ignore no-explicit-any
+    (assetsInDb ?? []).map((r: any) => [r.external_id, r.id]),
+  );
+
+  const { data: itemsInDb } = await sb
+    .from("dim_asset_items")
+    .select("asset_id")
+    .eq("type", "email");
+  // deno-lint-ignore no-explicit-any
+  const assetIdsWithItems = new Set((itemsInDb ?? []).map((r: any) => r.asset_id));
+
+  // 4. Para campanhas sem mensagens, buscar e gravar
+  let newMessages = 0;
+  const needsMessages = campaigns.filter((c) => {
+    const assetId = extToAssetId[c.id];
+    return assetId && !assetIdsWithItems.has(assetId);
+  });
+
+  for (const camp of needsMessages) {
+    const assetId = extToAssetId[camp.id];
+    const msgRecords: Array<Record<string, unknown>> = [];
+    for await (const msg of klaviyoPaginate(`/campaigns/${camp.id}/campaign-messages/`, {
+      "fields[campaign-message]": "label,created_at,updated_at",
+    }, key)) {
+      // deno-lint-ignore no-explicit-any
+      const a = (msg as any).attributes;
+      msgRecords.push({
+        // deno-lint-ignore no-explicit-any
+        external_id: (msg as any).id,
+        asset_id: assetId,
+        name: a.label || camp.name,
+        type: "email",
+        position: null,
+        ingested_at: now,
+      });
+    }
+    if (msgRecords.length > 0) {
+      await sb.from("dim_asset_items").upsert(msgRecords, { onConflict: "external_id,type" });
+      newMessages += msgRecords.length;
+    }
+  }
+
+  console.log(`Klaviyo campaigns: ${campaigns.length} campanhas, ${newMessages} novas mensagens`);
+  return { campaigns: campaigns.length, newMessages };
+}
+
 // ── Klaviyo — apenas métricas ──────────────────────────────────────────────
 // O catálogo (fluxos/campanhas/mensagens) já está no banco.
 // Aqui só sincroniza fact_email_sends para a janela dos últimos 7 dias.
@@ -479,12 +576,13 @@ serve(async (req) => {
     if (metricsSince < metricsFloor) metricsSince = metricsFloor;
 
     // Rodar em sequência para não estourar memória
-    const shopifyResult = await syncShopify(sb, channelIds, shopifySince);
-    const sheetsResult = await syncSheets(sb, channelIds);
-    const klaviyoResult = await syncKlaviyoMetrics(sb, metricsSince);
+    const shopifyResult  = await syncShopify(sb, channelIds, shopifySince);
+    const sheetsResult   = await syncSheets(sb, channelIds);
+    const campaignResult = await syncKlaviyoCampaigns(sb, Deno.env.get("KLAVIYO_PRIVATE_API_KEY")!, channelIds);
+    const klaviyoResult  = await syncKlaviyoMetrics(sb, metricsSince);
 
     return new Response(
-      JSON.stringify({ status: "ok", shopify: shopifyResult, sheets: sheetsResult, klaviyo: klaviyoResult }),
+      JSON.stringify({ status: "ok", shopify: shopifyResult, sheets: sheetsResult, klaviyo: klaviyoResult, campaigns: campaignResult }),
       { headers: { ...CORS, "Content-Type": "application/json" } },
     );
   } catch (err) {

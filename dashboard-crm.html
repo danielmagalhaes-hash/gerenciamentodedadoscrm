@@ -546,7 +546,10 @@ async function triggerSync() {
       const k = data.klaviyo ?? {};
       const s = data.shopify ?? {};
       const sh = data.sheets ?? {};
-      status.textContent = `Atualizado — ${s.count ?? 0} pedidos · ${sh.sessions ?? 0} sessões · ${k.metrics ?? 0} métricas e-mail`;
+      const c = data.campaigns ?? {};
+      const newCamp = c.newMessages ?? 0;
+      const campInfo = newCamp > 0 ? ` · ${newCamp} novos e-mails` : '';
+      status.textContent = `Atualizado — ${s.count ?? 0} pedidos · ${sh.sessions ?? 0} sessões · ${k.metrics ?? 0} métricas${campInfo}`;
       await applyFilters();
       _refreshLastUpdate();
     } else {
