@@ -751,8 +751,8 @@ const SLUG_NAME  = Object.fromEntries(Object.values(CHANNELS).map(c=>[c.slug,c.n
 const SLUG_ORDER = ['email_flow','email_campaign','wpp_flow','wpp_campaign','wpp_community'];
 
 const CFG = {
-  ef:{ topPerInscrito:true,  topPerDisparo:false, rankingMetric:'inscrito', rankingLabel:'Receita / Inscrito', drillDown:true,  pieceLabel:'E-mail', showInscritos:true,  hasHealth:true },
-  ec:{ topPerInscrito:false, topPerDisparo:true,  rankingMetric:'disparo',  rankingLabel:'Receita / Disparo',  drillDown:false, pieceLabel:'E-mail', showInscritos:false, hasHealth:true },
+  ef:{ topPerInscrito:true,  topPerDisparo:false, rankingMetric:'inscrito', rankingLabel:'Receita / Inscrito', drillDown:true,  pieceLabel:'E-mail', showInscritos:true,  hasHealth:false },
+  ec:{ topPerInscrito:false, topPerDisparo:true,  rankingMetric:'disparo',  rankingLabel:'Receita / Disparo',  drillDown:false, pieceLabel:'E-mail', showInscritos:false, hasHealth:false },
   wf:{ topPerInscrito:true,  topPerDisparo:false, rankingMetric:'inscrito', rankingLabel:'Receita / Inscrito', drillDown:true,  pieceLabel:'Template',showInscritos:true, hasHealth:false },
   wc:{ topPerInscrito:false, topPerDisparo:true,  rankingMetric:'disparo',  rankingLabel:'Receita / Disparo',  drillDown:true,  pieceLabel:'Template',showInscritos:false,hasHealth:false },
   co:{ topPerInscrito:false, topPerDisparo:true,  rankingMetric:'disparo',  rankingLabel:'Receita / Disparo',  drillDown:false, pieceLabel:'Mensagem',showInscritos:false,hasHealth:false }
