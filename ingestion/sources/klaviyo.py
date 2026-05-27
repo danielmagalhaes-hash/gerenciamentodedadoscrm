@@ -262,11 +262,16 @@ def fetch_email_metrics_since(client: httpx.Client, since: date) -> list[Klaviyo
 
 
 def _aggregate_metric_by_form(client: httpx.Client, metric_id: str, since: date) -> dict[tuple[str, str], int]:
-    """Retorna {(form_external_id, date_iso): unique_count} para um único tipo de evento de formulário."""
+    """Retorna {(form_external_id, date_iso): count} para um único tipo de evento de formulário.
+
+    Usa 'count' (total de eventos) em vez de 'unique' (perfis únicos) porque formulários
+    são acessados por visitantes anônimos que o Klaviyo não identifica como perfil —
+    usar 'unique' resulta em contagens próximas a 1 por dia, ignorando a maioria das views.
+    """
     until = date.today()
     body = {"data": {"type": "metric-aggregate", "attributes": {
         "metric_id": metric_id,
-        "measurements": ["unique"],
+        "measurements": ["count"],
         "interval": "day",
         "page_size": 500,
         "filter": [
@@ -282,7 +287,7 @@ def _aggregate_metric_by_form(client: httpx.Client, metric_id: str, since: date)
     date_strs = [d[:10] for d in raw_dates]
     for row in attrs.get("data", []):
         form_id = row["dimensions"][0]
-        for i, count in enumerate(row["measurements"].get("unique", [])):
+        for i, count in enumerate(row["measurements"].get("count", [])):
             if count and i < len(date_strs):
                 counts[(form_id, date_strs[i])] = int(count)
     return counts
