@@ -433,9 +433,96 @@ async function syncKlaviyoCampaigns(
   return { campaigns: campaigns.length, newMessages };
 }
 
+// ── Klaviyo — catálogo de e-mails de fluxo ───────────────────────────────
+// Garante que todos os flow actions de e-mail estão em dim_asset_items.
+// Só insere IDs ausentes (não sobrescreve nomes definidos pelo Python).
+// Roda apenas para fluxos que ainda não têm nenhum item no banco.
+
+async function syncKlaviyoFlowEmails(
+  sb: SupabaseClient,
+  key: string,
+  channelIds: Record<string, string>,
+): Promise<{ checked: number; newEmails: number }> {
+  const channelId = channelIds["email_flow"];
+  if (!channelId) return { checked: 0, newEmails: 0 };
+  const now = nowIso();
+
+  // IDs de flow assets no banco
+  const { data: flowAssets } = await sb
+    .from("dim_assets")
+    .select("id,external_id,name")
+    .eq("source_tool", "klaviyo")
+    .eq("type", "flow");
+  // deno-lint-ignore no-explicit-any
+  const flowExtToId: Record<string, string> = Object.fromEntries(
+    // deno-lint-ignore no-explicit-any
+    (flowAssets ?? []).map((r: any) => [r.external_id, r.id]),
+  );
+  // deno-lint-ignore no-explicit-any
+  const flowExtToName: Record<string, string> = Object.fromEntries(
+    // deno-lint-ignore no-explicit-any
+    (flowAssets ?? []).map((r: any) => [r.external_id, r.name]),
+  );
+
+  // IDs de e-mails já catalogados (para evitar reinserção de itens existentes)
+  const { data: itemsInDb } = await sb
+    .from("dim_asset_items")
+    .select("asset_id,external_id")
+    .eq("type", "email");
+  // deno-lint-ignore no-explicit-any
+  const existingExtIds = new Set((itemsInDb ?? []).map((r: any) => r.external_id));
+
+  // Verifica TODOS os fluxos — captura e-mails adicionados a fluxos já parcialmente catalogados
+  const flowsToSync = Object.keys(flowExtToId);
+
+  let newEmails = 0;
+  for (const flowExtId of flowsToSync) {
+    const assetId = flowExtToId[flowExtId];
+    const flowName = flowExtToName[flowExtId] || "";
+    const newItems: Array<Record<string, unknown>> = [];
+    let position = 0;
+
+    for await (const action of klaviyoPaginate(`/flows/${flowExtId}/flow-actions/`, {
+      "fields[flow-action]": "action_type,status",
+    }, key)) {
+      // deno-lint-ignore no-explicit-any
+      const a = (action as any).attributes;
+      if (a?.action_type !== "EMAIL") continue;
+      position++;
+      // deno-lint-ignore no-explicit-any
+      const actionId = (action as any).id;
+      if (existingExtIds.has(actionId)) continue;
+      newItems.push({
+        external_id: actionId,
+        asset_id: assetId,
+        name: `${flowName} [EM${String(position).padStart(3, "0")}]`,
+        type: "email",
+        position,
+        ingested_at: now,
+      });
+    }
+
+    if (newItems.length > 0) {
+      await sb.from("dim_asset_items").upsert(newItems, { onConflict: "external_id,type" });
+      newEmails += newItems.length;
+    }
+  }
+
+  console.log(`Klaviyo flow emails: ${flowsToSync.length} fluxos verificados, ${newEmails} novos e-mails`);
+  return { checked: flowsToSync.length, newEmails };
+}
+
 // ── Klaviyo — apenas métricas ──────────────────────────────────────────────
 // O catálogo (fluxos/campanhas/mensagens) já está no banco.
-// Aqui só sincroniza fact_email_sends para a janela dos últimos 7 dias.
+// Aqui só sincroniza fact_email_sends para a janela de datas solicitada.
+//
+// Estratégia de query:
+//   Fluxos  → um POST por fluxo com filter equals($flow,"id"), by:[$message].
+//             Garante que TODOS os e-mails do fluxo aparecem, mesmo os menos ativos.
+//             (query global by:[$message] trunca nos 500 $message mais ativos no geral)
+//   Campanhas → 6 POSTs globais (sem filtro de fluxo). Campanhas têm menos mensagens
+//             e não têm $flow, então não sofrem truncamento relevante.
+//             IDs de mensagens de fluxo já capturadas são ignorados para evitar duplo-cômputo.
 
 async function syncKlaviyoMetrics(
   sb: SupabaseClient,
@@ -461,42 +548,49 @@ async function syncKlaviyoMetrics(
     if (targetNames.has(name)) metricIds[name] = (item as any).id;
   }
 
-  // 2. Busca agregados por dia × mensagem (6 POST requests)
-  const rows: Record<string, Record<string, number | string>> = {};
   const sinceStr = metricsSince.toISOString().slice(0, 10);
   const untilStr = today.toISOString().slice(0, 10);
+  const baseFilters = [
+    `greater-or-equal(datetime,${sinceStr}T00:00:00+00:00)`,
+    `less-than(datetime,${untilStr}T23:59:59+00:00)`,
+  ];
 
-  for (const [field, metricName] of Object.entries(METRIC_FIELDS)) {
-    const metricId = metricIds[metricName];
-    if (!metricId) continue;
+  // 2. Fluxos que têm e-mails catalogados no banco (só esses têm onde gravar métricas)
+  const { data: allEmailItems } = await sb
+    .from("dim_asset_items")
+    .select("asset_id")
+    .eq("type", "email");
+  // deno-lint-ignore no-explicit-any
+  const assetIdsWithEmailItems = new Set((allEmailItems ?? []).map((r: any) => r.asset_id as string));
+
+  const { data: flowAssetsRaw } = await sb
+    .from("dim_assets")
+    .select("id,external_id")
+    .eq("source_tool", "klaviyo")
+    .eq("type", "flow");
+  const flowExtIds = (flowAssetsRaw ?? [])
+    // deno-lint-ignore no-explicit-any
+    .filter((r: any) => assetIdsWithEmailItems.has(r.id))
+    // deno-lint-ignore no-explicit-any
+    .map((r: any) => r.external_id as string);
+
+  // 3. Acumula resultados de metric-aggregates
+  const rows: Record<string, Record<string, number | string>> = {};
+
+  // deno-lint-ignore no-explicit-any
+  const processAggResult = (result: any, field: string, skipIds?: Set<string>) => {
     // "Opened Email" usa count: unique falha para e-mails com alto volume
     // de Apple MPP porque o pixel de abertura não carrega profile_id nesses casos,
     // fazendo unique = 0 mesmo com aberturas reais. As demais métricas usam unique
     // para evitar duplicação (disparos, cliques, descadastros são eventos únicos por natureza).
     const measurement = field === "opens" ? "count" : "unique";
-    // deno-lint-ignore no-explicit-any
-    const result = (await klaviyoPost("/metric-aggregates/", {
-      data: {
-        type: "metric-aggregate",
-        attributes: {
-          metric_id: metricId,
-          measurements: [measurement],
-          interval: "day",
-          page_size: 500,
-          filter: [
-            `greater-or-equal(datetime,${sinceStr}T00:00:00+00:00)`,
-            `less-than(datetime,${untilStr}T23:59:59+00:00)`,
-          ],
-          by: ["$message"],
-        },
-      },
-    }, key)) as any;
-
     const attrs = result.data?.attributes ?? {};
     const dates: string[] = (attrs.dates ?? []).map((d: string) => d.slice(0, 10));
     for (const row of attrs.data ?? []) {
       const msgId = row.dimensions?.[0];
-      ((row.measurements?.[measurement] ?? []) as number[]).forEach((count: number, i: number) => {
+      if (!msgId || skipIds?.has(msgId)) continue;
+      const measurements = (row.measurements?.[measurement] ?? []) as number[];
+      measurements.forEach((count: number, i: number) => {
         if (!count || i >= dates.length) return;
         const k = `${msgId}|${dates[i]}`;
         if (!rows[k]) {
@@ -505,9 +599,58 @@ async function syncKlaviyoMetrics(
         rows[k][field] = (rows[k][field] as number) + count;
       });
     }
+  };
+
+  // 3a. Fluxos — um call por fluxo × métrica, filtrado por equals($flow,"id")
+  //     Garante cobertura completa sem truncamento pelo top-500 global
+  for (const flowExtId of flowExtIds) {
+    for (const [field, metricName] of Object.entries(METRIC_FIELDS)) {
+      const metricId = metricIds[metricName];
+      if (!metricId) continue;
+      const measurement = field === "opens" ? "count" : "unique";
+      const result = await klaviyoPost("/metric-aggregates/", {
+        data: {
+          type: "metric-aggregate",
+          attributes: {
+            metric_id: metricId,
+            measurements: [measurement],
+            interval: "day",
+            page_size: 500,
+            filter: [...baseFilters, `equals($flow,"${flowExtId}")`],
+            by: ["$message"],
+          },
+        },
+      }, key);
+      processAggResult(result, field);
+    }
   }
 
-  // 3. Grava no banco
+  // 3b. Campanhas — query global (sem filtro de $flow)
+  //     skipIds: ignora $message de fluxos já capturados em 3a para evitar duplo-cômputo
+  const capturedFlowMessageIds = new Set(
+    Object.keys(rows).map((k) => k.split("|")[0]),
+  );
+  for (const [field, metricName] of Object.entries(METRIC_FIELDS)) {
+    const metricId = metricIds[metricName];
+    if (!metricId) continue;
+    const measurement = field === "opens" ? "count" : "unique";
+    const result = await klaviyoPost("/metric-aggregates/", {
+      data: {
+        type: "metric-aggregate",
+        attributes: {
+          metric_id: metricId,
+          measurements: [measurement],
+          interval: "day",
+          page_size: 500,
+          filter: baseFilters,
+          by: ["$message"],
+        },
+      },
+    }, key);
+    processAggResult(result, field, capturedFlowMessageIds);
+  }
+
+  // 4. Grava no banco
   const itemMap = await getAssetItemMap(sb);
   const metricRecords = [];
   for (const row of Object.values(rows)) {
@@ -530,7 +673,7 @@ async function syncKlaviyoMetrics(
     await sb.from("fact_email_sends").upsert(metricRecords.slice(i, i + 500), { onConflict: "date,asset_item_id" });
   }
 
-  console.log(`Klaviyo: ${metricRecords.length} métricas gravadas`);
+  console.log(`Klaviyo: ${metricRecords.length} métricas gravadas (${flowExtIds.length} fluxos + campanhas)`);
   return { metrics: metricRecords.length };
 }
 
@@ -593,18 +736,22 @@ serve(async (req) => {
       : undefined;
 
     // Rodar em sequência para não estourar memória
-    let shopifyResult  = { count: 0 };
-    let sheetsResult   = { sessions: 0, utm: 0 };
-    let campaignResult = { campaigns: 0, newMessages: 0 };
+    let shopifyResult    = { count: 0 };
+    let sheetsResult     = { sessions: 0, utm: 0 };
+    let campaignResult   = { campaigns: 0, newMessages: 0 };
+    let flowEmailResult  = { checked: 0, newEmails: 0 };
     if (!klaviyoOnly) {
       shopifyResult  = await syncShopify(sb, channelIds, shopifySince);
       sheetsResult   = await syncSheets(sb, channelIds);
       campaignResult = await syncKlaviyoCampaigns(sb, Deno.env.get("KLAVIYO_PRIVATE_API_KEY")!, channelIds);
     }
+    // Catálogo de e-mails de fluxo: roda sempre (inclui klaviyo_only) para garantir
+    // que novos fluxos sejam capturados antes das métricas serem buscadas.
+    flowEmailResult = await syncKlaviyoFlowEmails(sb, Deno.env.get("KLAVIYO_PRIVATE_API_KEY")!, channelIds);
     const klaviyoResult = await syncKlaviyoMetrics(sb, metricsSince, metricsUntil);
 
     return new Response(
-      JSON.stringify({ status: "ok", shopify: shopifyResult, sheets: sheetsResult, klaviyo: klaviyoResult, campaigns: campaignResult }),
+      JSON.stringify({ status: "ok", shopify: shopifyResult, sheets: sheetsResult, klaviyo: klaviyoResult, campaigns: campaignResult, flowEmails: flowEmailResult }),
       { headers: { ...CORS, "Content-Type": "application/json" } },
     );
   } catch (err) {
