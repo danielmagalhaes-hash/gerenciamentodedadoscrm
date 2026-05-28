@@ -715,10 +715,8 @@ async function fetchEmailAssets(slug, start, end) {
   if (error) { console.error('fetchEmailAssets error:', error); return []; }
   return data || [];
 }
-async function fetchEmailFlowItems() {
-  const {data, error} = await _sb.from('vw_email_flow_item_metrics')
-    .select('asset_id,item_id,item_name,position,is_active,sends,opens,clicks,bounces,unsubscribes,open_rate_pct,ctor_pct')
-    .order('asset_id').order('position').order('item_name');
+async function fetchEmailFlowItems(start, end) {
+  const {data, error} = await _sb.rpc('get_email_flow_item_metrics', {p_start: start, p_end: end});
   if (error) { console.error('fetchEmailFlowItems error:', error); return []; }
   return data || [];
 }
@@ -1207,7 +1205,7 @@ async function renderChannel(key){
       fetches.push(fetchEmailAssets(ch.slug, start, end));
     }
     if (key === 'ef') {
-      fetches.push(fetchEmailFlowItems());
+      fetches.push(fetchEmailFlowItems(start, end));
     }
     const results = await Promise.all(fetches);
     allRows = results[0]; revByType = results[1];
