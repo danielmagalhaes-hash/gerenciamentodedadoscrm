@@ -468,13 +468,18 @@ async function syncKlaviyoMetrics(
   for (const [field, metricName] of Object.entries(METRIC_FIELDS)) {
     const metricId = metricIds[metricName];
     if (!metricId) continue;
+    // "Opened Email" usa count: unique falha para e-mails com alto volume
+    // de Apple MPP porque o pixel de abertura não carrega profile_id nesses casos,
+    // fazendo unique = 0 mesmo com aberturas reais. As demais métricas usam unique
+    // para evitar duplicação (disparos, cliques, descadastros são eventos únicos por natureza).
+    const measurement = field === "opens" ? "count" : "unique";
     // deno-lint-ignore no-explicit-any
     const result = (await klaviyoPost("/metric-aggregates/", {
       data: {
         type: "metric-aggregate",
         attributes: {
           metric_id: metricId,
-          measurements: ["unique"],
+          measurements: [measurement],
           interval: "day",
           page_size: 500,
           filter: [
@@ -490,7 +495,7 @@ async function syncKlaviyoMetrics(
     const dates: string[] = (attrs.dates ?? []).map((d: string) => d.slice(0, 10));
     for (const row of attrs.data ?? []) {
       const msgId = row.dimensions?.[0];
-      ((row.measurements?.unique ?? []) as number[]).forEach((count: number, i: number) => {
+      ((row.measurements?.[measurement] ?? []) as number[]).forEach((count: number, i: number) => {
         if (!count || i >= dates.length) return;
         const k = `${msgId}|${dates[i]}`;
         if (!rows[k]) {
