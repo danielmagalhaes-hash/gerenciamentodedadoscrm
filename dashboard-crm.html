@@ -715,6 +715,11 @@ async function fetchEmailAssets(slug, start, end) {
   if (error) { console.error('fetchEmailAssets error:', error); return []; }
   return data || [];
 }
+async function fetchEmailFlowAssets(start, end) {
+  const {data, error} = await _sb.rpc('get_email_flow_asset_metrics', {p_start: start, p_end: end});
+  if (error) { console.error('fetchEmailFlowAssets error:', error); return []; }
+  return data || [];
+}
 async function fetchEmailFlowItems(start, end) {
   const {data, error} = await _sb.rpc('get_email_flow_item_metrics', {p_start: start, p_end: end});
   if (error) { console.error('fetchEmailFlowItems error:', error); return []; }
@@ -1202,7 +1207,7 @@ async function renderChannel(key){
     ];
     if (isEmail) {
       fetches.push(fetchEmailChannelDaily(ch.slug, start, end));
-      fetches.push(fetchEmailAssets(ch.slug, start, end));
+      fetches.push(key === 'ef' ? fetchEmailFlowAssets(start, end) : fetchEmailAssets(ch.slug, start, end));
     }
     if (key === 'ef') {
       fetches.push(fetchEmailFlowItems(start, end));
