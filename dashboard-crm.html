@@ -1334,18 +1334,11 @@ async function renderChannel(key){
 
   // Gráfico de eficiência: Receita/Disparo (ec) ou Disparos+Aberturas (ef)
   if(isEmail && !cfg.topPerInscrito){
-    // E-mail Campanha: Receita por Disparo — agrupa por send_date dos assets
-    const effByDate = {};
-    for (const r of emailAssetRows) {
-      const d = (r.send_date||'').slice(0,10);
-      if (!d) continue;
-      if (!effByDate[d]) effByDate[d] = {sends:0, rev:0};
-      effByDate[d].sends += (+r.sends||0);
-      effByDate[d].rev   += (+r.revenue_brl||0);
-    }
+    // E-mail Campanha: Receita do canal no dia ÷ disparos do canal no dia
     const revPerDisp = dates.map(d => {
-      const entry = effByDate[d];
-      return (entry && entry.sends > 0 && entry.rev > 0) ? entry.rev / entry.sends : null;
+      const rev   = byDay[d]?.revenue_brl || 0;
+      const sends = +emByDay[d]?.sends    || 0;
+      return (sends > 0 && rev > 0) ? rev / sends : null;
     });
     mkChart('chart-eff-'+key,{
       type:'line',
