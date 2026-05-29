@@ -702,11 +702,12 @@ async function fetchEmailChannelDaily(slug, start, end) {
 }
 async function fetchEmailAssets(slug, start, end) {
   const isCampaign = slug === 'email_campaign';
-  let q = _sb.from('vw_email_asset_metrics')
+  const viewName = isCampaign ? 'vw_campaign_email_metrics' : 'vw_email_asset_metrics';
+  let q = _sb.from(viewName)
     .select('asset_id,asset_name,asset_type,is_active,first_date,last_date,send_date,sends,opens,clicks,bounces,unsubscribes,open_rate_pct,ctor_pct,sends_per_day,revenue_brl,revenue_per_send')
     .eq('channel_slug', slug)
     .gt('sends', 0)
-    .order(isCampaign ? 'send_date' : 'sends', {ascending: false, nullsFirst: false})
+    .order('send_date', {ascending: false, nullsFirst: false})
     .limit(2000);
   if (isCampaign && start && end) {
     q = q.gte('send_date', start).lte('send_date', end);
