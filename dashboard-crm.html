@@ -1345,7 +1345,7 @@ async function renderChannel(key){
     }
     const revPerDisp = dates.map(d => {
       const entry = effByDate[d];
-      return (entry && entry.sends > 0) ? entry.rev / entry.sends : null;
+      return (entry && entry.sends > 0 && entry.rev > 0) ? entry.rev / entry.sends : null;
     });
     mkChart('chart-eff-'+key,{
       type:'line',
@@ -1392,8 +1392,7 @@ async function renderChannel(key){
       {label:'Taxa de Abertura', val:em.sends>0?fmtPct1(safe(em.opens,em.sends)):'—'},
       {label:'Cliques',          val:fmtInt(em.clicks)},
       {label:'CTOR',             val:em.opens>0?fmtPct1(safe(em.clicks,em.opens)):'—'},
-      {label:'Descadastros',     val:fmtInt(em.unsubscribes)},
-      {label:'Bounces',          val:fmtInt(em.bounces)},
+      ...(key==='ef' ? [{label:'Descadastros',val:fmtInt(em.unsubscribes)},{label:'Bounces',val:fmtInt(em.bounces)}] : []),
       {label:'Receita / Disparo',val:em.sends>0?fmtBRL2(safe(s.rev,em.sends)):'—'},
     ];
   } else if(isCommunity){
