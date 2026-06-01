@@ -761,6 +761,36 @@ async function fetchEmailFlowItems(start, end) {
   if (error) { console.error('fetchEmailFlowItems error:', error); return []; }
   return data || [];
 }
+async function fetchFlowDailyMetrics(flowName, start, end) {
+  const {data} = await _sb.from('flow_email_metrics')
+    .select('data, email_enviado, email_aberto, email_clicado')
+    .eq('flow_name', flowName).gte('data', start).lte('data', end);
+  const byDay = {};
+  for (const r of data || []) {
+    if (!byDay[r.data]) byDay[r.data] = {sends:0, opens:0, clicks:0};
+    byDay[r.data].sends  += +r.email_enviado  || 0;
+    byDay[r.data].opens  += +r.email_aberto   || 0;
+    byDay[r.data].clicks += +r.email_clicado  || 0;
+  }
+  return byDay;
+}
+async function fetchFlowDailyRevenue(utmCampaign, start, end) {
+  if (!utmCampaign) return { byDay:{}, total:0, orders:0 };
+  const {data} = await _sb.from('fact_orders')
+    .select('order_date, revenue_brl')
+    .eq('utm_source', 'email')
+    .in('utm_medium', ['email_fluxo','fluxos_crm'])
+    .ilike('utm_campaign', utmCampaign)
+    .gte('order_date', start).lte('order_date', end);
+  const byDay = {};
+  let total = 0, orders = 0;
+  for (const r of data || []) {
+    byDay[r.order_date] = (byDay[r.order_date] || 0) + parseFloat(r.revenue_brl || 0);
+    total += parseFloat(r.revenue_brl || 0);
+    orders++;
+  }
+  return { byDay, total, orders };
+}
 function aggregateTotals(rows) {
   const byChannel={}, byDate={};
   for (const r of rows) {
@@ -1317,9 +1347,57 @@ async function renderChannel(key){
   const dailyRevData = dates.map(d => byDay[d]?.revenue_brl || 0);
   const compRevData  = compDates.map(d => compByDay[d]?.revenue_brl || 0);
 
-  const emByDay = {};
+  let emByDay = {};
   for (const r of emailDaily) emByDay[(r.date||'').slice(0,10)] = r;
-  const em = emailDaily.reduce((a,r) => ({
+
+  // ── Filtro por fluxo específico (E-mail Fluxo) ────────────────────
+  let activeFlowFilter = null;
+  if (key === 'ef') {
+    // Popula dropdown com nomes dos fluxos carregados
+    const sel = document.getElementById('f-asset');
+    const currentVal = sel.value;
+    sel.innerHTML = '<option value="all">Todos os Fluxos</option>';
+    emailAssetRows.forEach(r => {
+      const n = r.asset_name || '';
+      sel.innerHTML += `<option value="${n.replace(/"/g,'&quot;')}"${n===currentVal?' selected':''}>${n}</option>`;
+    });
+    sel.disabled = false;
+    document.getElementById('f-asset-label').textContent = 'Fluxo';
+
+    const flowSel = document.getElementById('f-asset').value;
+    if (flowSel !== 'all') {
+      activeFlowFilter = flowSel;
+      const selRow = emailAssetRows.find(r => r.asset_name === flowSel);
+      if (selRow) {
+        const [flowEmDaily, flowRevData] = await Promise.all([
+          fetchFlowDailyMetrics(flowSel, start, end),
+          fetchFlowDailyRevenue(selRow.utm_campaign, start, end),
+        ]);
+        // Sobrescreve emByDay com dados do fluxo selecionado
+        emByDay = {};
+        for (const d of dates) {
+          emByDay[d] = flowEmDaily[d]
+            ? { sends: flowEmDaily[d].sends, opens: flowEmDaily[d].opens, clicks: flowEmDaily[d].clicks, bounces: 0, unsubscribes: 0 }
+            : { sends: 0, opens: 0, clicks: 0, bounces: 0, unsubscribes: 0 };
+        }
+        // Sobrescreve receita diária com receita do fluxo
+        for (const d of dates) {
+          if (!byDay[d]) byDay[d] = {revenue_brl:0, orders:0, sessions:0, add_to_cart:0, begin_checkout:0};
+          byDay[d].revenue_brl = flowRevData.byDay[d] || 0;
+        }
+        // Sobrescreve totais com dados do fluxo
+        s.rev = flowRevData.total;
+        s.purchases = flowRevData.orders;
+        s.sessions = 0; s.atc = 0; s.bco = 0;
+        // Inscritos apenas do fluxo selecionado
+        const flowItems = emailFlowItemRows.filter(p => p.asset_id === selRow.asset_id);
+        inscritos = flowItems.filter(p => /EM001/i.test(p.item_name||'')).reduce((sum,p)=>sum+(+p.sends||0),0);
+      }
+    }
+  }
+
+  // Calcula em a partir de emByDay (já pode ter sido sobrescrito pelo filtro de fluxo)
+  const em = Object.values(emByDay).reduce((a,r) => ({
     sends:        a.sends        + (+r.sends||0),
     opens:        a.opens        + (+r.opens||0),
     clicks:       a.clicks       + (+r.clicks||0),
@@ -1518,10 +1596,39 @@ async function renderChannel(key){
   const baseFilter = document.getElementById('f-asset').value;
   const displayAssetRows = (key === 'ec' && baseFilter !== 'all')
     ? emailAssetRows.filter(r => (r.asset_name||'').toLowerCase().includes(baseFilter.toLowerCase()))
-    : emailAssetRows;
+    : (key === 'ef' && activeFlowFilter)
+      ? emailAssetRows.filter(r => r.asset_name === activeFlowFilter)
+      : emailAssetRows;
+
   if(isEmail && displayAssetRows.length > 0){
     renderEmailAssetTable(key, displayAssetRows, ch.color, flowItemsMap);
     if(key === 'ef') renderFlowUtmAlert(displayAssetRows, emailFlowItemRows);
+
+    // Rankings E-mail Fluxo — sempre com todos os fluxos (ignorar filtro ativo)
+    if(key === 'ef' && emailAssetRows.length > 0){
+      const maxRev = Math.max(...emailAssetRows.map(r=>+r.revenue_brl||0), 1);
+      const maxSends = Math.max(...emailAssetRows.map(r=>+r.sends||0), 1);
+      const byRevDesc  = [...emailAssetRows].sort((a,b)=>(+b.revenue_brl||0)-(+a.revenue_brl||0));
+      const byRecInsc  = [...emailAssetRows].filter(r=>+r.revenue_brl>0).sort((a,b)=>{
+        const ai = emailFlowItemRows.filter(p=>p.asset_id===a.asset_id&&/EM001/i.test(p.item_name||'')).reduce((s,p)=>s+(+p.sends||0),0);
+        const bi = emailFlowItemRows.filter(p=>p.asset_id===b.asset_id&&/EM001/i.test(p.item_name||'')).reduce((s,p)=>s+(+p.sends||0),0);
+        const ar = ai>0?(+a.revenue_brl||0)/ai:0;
+        const br = bi>0?(+b.revenue_brl||0)/bi:0;
+        return br-ar;
+      });
+      document.getElementById('rank-best-'+key).innerHTML    = byRevDesc.slice(0,5).map((r,i)=>rankRow(i+1,r.asset_name,fmtBRLfull(+r.revenue_brl||0),(+r.revenue_brl||0)/maxRev,ch.color)).join('');
+      document.getElementById('rank-worst-'+key).innerHTML   = byRevDesc.slice(-5).reverse().map((r,i)=>rankRow(i+1,r.asset_name,fmtInt(+r.sends||0),(+r.sends||0)/maxSends,'#94a3b8')).join('');
+      document.getElementById('rank-best-eff-'+key).innerHTML = byRecInsc.slice(0,5).map((r,i)=>{
+        const insc = emailFlowItemRows.filter(p=>p.asset_id===r.asset_id&&/EM001/i.test(p.item_name||'')).reduce((s,p)=>s+(+p.sends||0),0);
+        const ri = insc>0?(+r.revenue_brl||0)/insc:0;
+        return rankRow(i+1,r.asset_name,fmtBRL2(ri),ri/(+byRecInsc[0]?.revenue_brl||1),ch.color);
+      }).join('');
+      document.getElementById('rank-worst-eff-'+key).innerHTML = byRecInsc.slice(-5).reverse().map((r,i)=>{
+        const insc = emailFlowItemRows.filter(p=>p.asset_id===r.asset_id&&/EM001/i.test(p.item_name||'')).reduce((s,p)=>s+(+p.sends||0),0);
+        const ri = insc>0?(+r.revenue_brl||0)/insc:0;
+        return rankRow(i+1,r.asset_name,fmtBRL2(ri),ri/(+byRecInsc[0]?.revenue_brl||1),'#94a3b8');
+      }).join('');
+    }
   } else if(!isEmail){
     // WPP/Community: tabela mock
     const assets = ASSETS[key];
@@ -1922,6 +2029,9 @@ function updateAssetFilter(page){
     });
     sel.disabled = false;
     if(lbl) lbl.textContent = 'Base';
+  } else if(page === 'ef'){
+    sel.disabled = false; // será populado dinamicamente após carregar dados
+    if(lbl) lbl.textContent = 'Fluxo';
   } else if(ASSETS[page]){
     ASSETS[page].forEach(a=>{ sel.innerHTML += `<option value="${a}">${a}</option>`; });
     sel.disabled = false;
