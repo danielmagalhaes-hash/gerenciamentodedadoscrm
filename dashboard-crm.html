@@ -390,7 +390,6 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
 </section>
 
 <section class="page" id="page-ef"></section>
-<div id="flow-utm-alert" style="display:none"></div>
 <section class="page" id="page-ec"></section>
 <section class="page" id="page-wf"></section>
 <section class="page" id="page-wc"></section>
@@ -1565,8 +1564,13 @@ function heatColor(val,min,max){
 // ALERTA DE UTMs PENDENTES — E-mail Fluxo
 // =========================================
 async function renderFlowUtmAlert(flowRows, itemRows) {
-  const el = document.getElementById('flow-utm-alert');
-  if (!el) return;
+  // Injeta o card diretamente no page-ef, após a tabela de ativos
+  const page = document.getElementById('page-ef');
+  if (!page) return;
+
+  // Remove alerta anterior se existir
+  const old = page.querySelector('#flow-utm-alert');
+  if (old) old.remove();
 
   const flowsWithUtm = new Set(flowRows.filter(r => r.has_utm).map(r => r.asset_id).filter(Boolean));
   const flowsSemUtm  = [...new Set(flowRows.filter(r => !r.has_utm).map(r => r.asset_name))];
@@ -1576,7 +1580,11 @@ async function renderFlowUtmAlert(flowRows, itemRows) {
 
   const nFluxos = flowsSemUtm.length;
   const nEmails = emailsSemTerm.length;
-  if (nFluxos === 0 && nEmails === 0) { el.style.display = 'none'; return; }
+  if (nFluxos === 0 && nEmails === 0) return;
+
+  const el = document.createElement('div');
+  el.id = 'flow-utm-alert';
+  page.appendChild(el);
 
   const resumo = [];
   if (nFluxos > 0) resumo.push(`${nFluxos} fluxo(s) sem UTM`);
