@@ -1,8 +1,15 @@
 {
-  "builds": [
-    { "src": "*.html", "use": "@vercel/static" }
+  "rewrites": [
+    { "source": "/", "destination": "/dashboard-crm.html" }
   ],
-  "routes": [
-    { "src": "/", "dest": "/dashboard-crm.html" }
+  "functions": {
+    "api/cron/*.py": { "maxDuration": 300 }
+  },
+  "crons": [
+    { "path": "/api/cron/revenue",        "schedule": "*/35 * * * *" },
+    { "path": "/api/cron/sessions",       "schedule": "10 * * * *"  },
+    { "path": "/api/cron/email_flow",     "schedule": "0 7 * * *"   },
+    { "path": "/api/cron/email_campaign", "schedule": "30 3 * * *"  },
+    { "path": "/api/cron/forms",          "schedule": "0 9 * * *"   }
   ]
 }

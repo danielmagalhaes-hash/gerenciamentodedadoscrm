@@ -110,6 +110,69 @@ def run_klaviyo_ingestion(klaviyo_days: int | None = None) -> None:
     logger.info("=== Klaviyo: ingestão finalizada ===")
 
 
+def run_email_flow_ingestion() -> None:
+    """Sincroniza catálogo de fluxos + métricas diárias de e-mail → fact_email_sends."""
+    logger.info("=== E-mail Fluxo: início ===")
+    today = date.today()
+    sb = get_supabase_client()
+    client = klaviyo_source.make_client()
+    channel_ids = writers.get_channel_ids(sb)
+    latest = writers.get_latest_dates(sb)
+
+    flows = klaviyo_source.fetch_flows(client)
+    writers.upsert_flow_assets(sb, flows, channel_ids)
+    asset_map = writers.get_asset_map(sb)
+    flow_messages: list = []
+    for flow in flows:
+        flow_messages.extend(klaviyo_source.fetch_flow_messages(client, flow.id))
+    writers.upsert_flow_asset_items(sb, flow_messages, asset_map)
+
+    if latest["email_sends"]:
+        metrics_since = latest["email_sends"] + timedelta(days=1)
+        if metrics_since > today:
+            logger.info({"event": "email_flow_skip", "reason": "banco já atualizado"})
+            logger.info("=== E-mail Fluxo: sem dados novos ===")
+            return
+    else:
+        metrics_since = today - timedelta(days=30)
+
+    item_map = writers.get_asset_item_map(sb)
+    campaign_to_item_map = writers.get_campaign_to_item_map(sb)
+    metric_rows = klaviyo_source.fetch_email_metrics_since(client, metrics_since)
+    writers.upsert_email_sends(sb, metric_rows, item_map, campaign_to_item_map)
+    logger.info("=== E-mail Fluxo: finalizado ===")
+
+
+def run_forms_ingestion() -> None:
+    """Sincroniza formulários e saúde da base → dim_forms, fact_lead_captures, fact_email_health."""
+    logger.info("=== Formulários: início ===")
+    today = date.today()
+    sb = get_supabase_client()
+    client = klaviyo_source.make_client()
+    channel_ids = writers.get_channel_ids(sb)
+    latest = writers.get_latest_dates(sb)
+
+    forms = klaviyo_source.fetch_forms(client)
+    writers.upsert_forms(sb, forms)
+
+    active_count = klaviyo_source.fetch_active_base_count(client)
+    writers.upsert_email_health(sb, active_count, today, channel_ids)
+
+    form_id_map = writers.get_form_id_map(sb)
+    if latest.get("form_captures"):
+        form_metrics_since = latest["form_captures"] + timedelta(days=1)
+        if form_metrics_since > today:
+            logger.info({"event": "forms_skip", "reason": "banco já atualizado"})
+            logger.info("=== Formulários: sem dados novos ===")
+            return
+    else:
+        form_metrics_since = today - timedelta(days=90)
+
+    form_metric_rows = klaviyo_source.fetch_form_metrics_since(client, form_metrics_since)
+    writers.upsert_form_captures(sb, form_metric_rows, form_id_map)
+    logger.info("=== Formulários: finalizado ===")
+
+
 def run_shopify_ingestion() -> None:
     logger.info("=== Shopify: início da ingestão ===")
     since = date.today() - timedelta(days=SHOPIFY_DAYS_LOOKBACK)
