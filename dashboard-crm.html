@@ -1234,6 +1234,7 @@ async function renderChannel(key){
 
   let allRows = [], revByType = [], allCompRows = [], compRevByType = [];
   let emailDaily = [], emailAssetRows = [], flowItemsMap = {}, inscritos = 0;
+  let emailFlowItemRows = [];
   try {
     const fetches = [
       fetchChannelData(start, end),
@@ -1253,6 +1254,7 @@ async function renderChannel(key){
     allCompRows = results[2]; compRevByType = results[3];
     if (isEmail) { emailDaily = results[4]; emailAssetRows = results[5]; }
     if (key === 'ef' && results[6]) {
+      emailFlowItemRows = results[6];
       for (const item of results[6]) {
         if (!flowItemsMap[item.asset_id]) flowItemsMap[item.asset_id] = [];
         flowItemsMap[item.asset_id].push(item);
@@ -1511,7 +1513,7 @@ async function renderChannel(key){
     : emailAssetRows;
   if(isEmail && displayAssetRows.length > 0){
     renderEmailAssetTable(key, displayAssetRows, ch.color, flowItemsMap);
-    if(key === 'ef') renderFlowUtmAlert(displayAssetRows, results[6] || []);
+    if(key === 'ef') renderFlowUtmAlert(displayAssetRows, emailFlowItemRows);
   } else if(!isEmail){
     // WPP/Community: tabela mock
     const assets = ASSETS[key];
