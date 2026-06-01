@@ -1568,34 +1568,39 @@ async function renderFlowUtmAlert(flowRows, itemRows) {
   const el = document.getElementById('flow-utm-alert');
   if (!el) return;
 
-  // Fluxos sem UTM
-  const flowsSemUtm = flowRows.filter(r => !r.has_utm).map(r => r.asset_name);
-  // E-mails sem term identificável (não tem LEADS nem CLIENTES no nome)
-  const emailsSemTerm = itemRows.filter(p => {
-    if (!p.has_utm) return false; // fluxo já sem UTM — não duplicar alerta
-    return !/LEADS|CLIENTES/i.test(p.item_name || '');
-  }).map(p => p.item_name);
+  const flowsWithUtm = new Set(flowRows.filter(r => r.has_utm).map(r => r.asset_id).filter(Boolean));
+  const flowsSemUtm  = [...new Set(flowRows.filter(r => !r.has_utm).map(r => r.asset_name))];
+  const emailsSemTerm = [...new Set(itemRows.filter(p =>
+    flowsWithUtm.has(p.asset_id) && !/LEADS|CLIENTES/i.test(p.item_name || '')
+  ).map(p => p.item_name))];
 
-  const problemas = [...new Set([...flowsSemUtm, ...emailsSemTerm])];
-  if (problemas.length === 0) { el.style.display = 'none'; return; }
+  const nFluxos = flowsSemUtm.length;
+  const nEmails = emailsSemTerm.length;
+  if (nFluxos === 0 && nEmails === 0) { el.style.display = 'none'; return; }
+
+  const resumo = [];
+  if (nFluxos > 0) resumo.push(`${nFluxos} fluxo(s) sem UTM`);
+  if (nEmails > 0) resumo.push(`${nEmails} e-mail(s) sem [LEADS]/[CLIENTES] no nome`);
 
   el.style.display = '';
   el.innerHTML = `
     <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin-top:16px">
-      <div style="font-weight:600;color:#92400e;margin-bottom:8px">⚠ ${problemas.length} fluxo(s)/e-mail(s) sem UTM configurada</div>
-      <div style="font-size:12px;color:#78350f;margin-bottom:10px">
-        Os itens abaixo não têm UTM configurada ou o nome não segue o padrão [LEADS]/[CLIENTES].
-        Preencha abaixo e salve para enviar a configuração.
-      </div>
-      <ul style="font-size:12px;color:#92400e;margin:0 0 12px 16px">
-        ${problemas.map(p => `<li>${p}</li>`).join('')}
-      </ul>
+      <div style="font-weight:600;color:#92400e;margin-bottom:6px">⚠ Configuração de UTM necessária</div>
+      <div style="font-size:12px;color:#78350f;margin-bottom:10px">${resumo.join(' · ')} — descreva abaixo as UTMs corretas e salve para eu implementar na próxima sessão.</div>
+      <details style="margin-bottom:10px">
+        <summary style="font-size:12px;color:#92400e;cursor:pointer">Ver lista completa de itens</summary>
+        <ul style="font-size:11px;color:#92400e;margin:6px 0 0 16px">
+          ${[...flowsSemUtm, ...emailsSemTerm].map(p => `<li>${p}</li>`).join('')}
+        </ul>
+      </details>
       <textarea id="utm-pending-msg" rows="4" style="width:100%;font-size:12px;padding:8px;border:1px solid #f59e0b;border-radius:4px;box-sizing:border-box"
-        placeholder="Descreva as UTMs corretas para cada item acima (ex: [Fluxo X] → utm_campaign: fluxo-x)"></textarea>
-      <button onclick="saveUtmPending()" style="margin-top:8px;background:#f59e0b;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:13px">
-        Salvar configuração
-      </button>
-      <span id="utm-pending-status" style="font-size:12px;margin-left:10px;color:#78350f"></span>
+        placeholder="Ex: [Fluxo Inverno - Clientes 60D] → utm_campaign: inverno-clientes-60d"></textarea>
+      <div style="margin-top:8px">
+        <button onclick="saveUtmPending()" style="background:#f59e0b;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600">
+          Salvar e enviar ao Claude
+        </button>
+        <span id="utm-pending-status" style="font-size:12px;margin-left:10px;color:#78350f"></span>
+      </div>
     </div>`;
 }
 
