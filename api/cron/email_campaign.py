@@ -30,6 +30,8 @@ class handler(BaseHTTPRequestHandler):
             load_dotenv()
             from ingestion.campaign_metrics_daily import run_yesterday
             run_yesterday()
+            from ingestion.alert import log_cron
+            log_cron("email_campaign", "ok")
             self._json(200, {"status": "ok", "job": "email_campaign"})
         except Exception as e:
             logger.error({"event": "cron_failed", "job": "email_campaign", "error": str(e)})

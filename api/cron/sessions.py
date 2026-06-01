@@ -30,6 +30,8 @@ class handler(BaseHTTPRequestHandler):
             load_dotenv()
             from ingestion.main import run_sheets_ingestion
             run_sheets_ingestion()  # Sheets entrega tudo via CSV — upsert garante idempotência
+            from ingestion.alert import log_cron
+            log_cron("sessions", "ok")
             self._json(200, {"status": "ok", "job": "sessions"})
         except Exception as e:
             logger.error({"event": "cron_failed", "job": "sessions", "error": str(e)})

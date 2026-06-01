@@ -132,6 +132,12 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
 </head>
 <body>
 
+<!-- ====== Banner de alerta de cron ====== -->
+<div id="cron-alert-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#dc2626;color:#fff;padding:10px 20px;font-size:13px;font-weight:500;display:none;align-items:center;justify-content:space-between;gap:12px;">
+  <span id="cron-alert-msg">⚠️ Falha na atualização automática dos dados.</span>
+  <button onclick="document.getElementById('cron-alert-banner').style.display='none'" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Fechar</button>
+</div>
+
 <!-- ====== Auth loading (cobre tudo enquanto verifica sessão) ====== -->
 <div id="auth-loading" style="position:fixed;inset:0;background:#f4f6fa;z-index:9998;display:flex;align-items:center;justify-content:center;font-size:14px;color:#6b7785">Verificando acesso…</div>
 
@@ -402,6 +408,34 @@ const _sb = supabase.createClient(
 );
 
 // =========================================
+// ALERTAS DE CRON
+// =========================================
+const CRON_NAMES = {
+  revenue:        'Receita (Shopify)',
+  sessions:       'Sessões (GA4)',
+  email_flow:     'E-mail Fluxo',
+  email_campaign: 'E-mail Campanha',
+  forms:          'Formulários',
+};
+
+async function checkCronAlerts() {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data } = await _sb
+    .from('cron_logs')
+    .select('job, message, ran_at')
+    .eq('status', 'error')
+    .gte('ran_at', since)
+    .order('ran_at', { ascending: false });
+
+  if (!data || data.length === 0) return;
+
+  const jobs = [...new Set(data.map(r => CRON_NAMES[r.job] || r.job))];
+  const msg = `⚠️ Falha na atualização automática: ${jobs.join(', ')}. Verifique os logs da Vercel.`;
+  document.getElementById('cron-alert-msg').textContent = msg;
+  document.getElementById('cron-alert-banner').style.display = 'flex';
+}
+
+// =========================================
 // SINCRONIZAÇÃO — Supabase Edge Function (sem Railway)
 // =========================================
 
@@ -450,6 +484,7 @@ function _enterDashboard(email) {
     document.getElementById('btn-signout').style.display = '';
   }
   _refreshLastUpdate();
+  checkCronAlerts();
   renderResumo();
 }
 

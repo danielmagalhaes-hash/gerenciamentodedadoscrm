@@ -30,6 +30,8 @@ class handler(BaseHTTPRequestHandler):
             load_dotenv()
             from ingestion.main import run_smart_shopify_ingestion
             run_smart_shopify_ingestion()
+            from ingestion.alert import log_cron
+            log_cron("revenue", "ok")
             self._json(200, {"status": "ok", "job": "revenue"})
         except Exception as e:
             logger.error({"event": "cron_failed", "job": "revenue", "error": str(e)})

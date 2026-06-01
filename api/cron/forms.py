@@ -30,6 +30,8 @@ class handler(BaseHTTPRequestHandler):
             load_dotenv()
             from ingestion.main import run_forms_ingestion
             run_forms_ingestion()
+            from ingestion.alert import log_cron
+            log_cron("forms", "ok")
             self._json(200, {"status": "ok", "job": "forms"})
         except Exception as e:
             logger.error({"event": "cron_failed", "job": "forms", "error": str(e)})
