@@ -1342,8 +1342,10 @@ async function renderChannel(key){
     {label:'RPS',         val:s.sessions>0?fmtBRL2(rps):'—',                     delta:s.sessions>0&&compTotals.sessions>0?_deltaBadge(rps,compRps):''},
     {label:'Conversão',   val:s.sessions>0?fmtPct(conv):'—',                     delta:s.sessions>0&&compTotals.sessions>0?_deltaBadge(conv,compConv):''},
   ];
-  if(isEmail){
+  if(isEmail && key === 'ef'){
     kpis.push({label:'CTOR', val:em.opens>0?fmtPct1(safe(em.clicks,em.opens)):'—', highlight:true, delta:''});
+  } else if(isEmail && key === 'ec'){
+    kpis.push({label:'Receita / Disparo', val:em.sends>0?fmtBRL2(safe(s.rev,em.sends)):'—', highlight:true, delta:''});
   } else if(cfg.topPerDisparo){
     kpis.push({label:'Receita / Disparo', val:disparos>0?fmtBRL2(safe(s.rev,disparos)):'—', highlight:true, delta:''});
   }
