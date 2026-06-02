@@ -542,10 +542,18 @@ _sb.auth.onAuthStateChange(async (event, session) => {
       _showLoginOverlay('E-mail não autorizado. Use @minimalclub.com.br ou @moonventures.com.', true);
       return;
     }
+    // Salva token no cookie para verificação server-side (Flask)
+    document.cookie = 'sb_token=' + session.access_token + '; path=/; samesite=strict; max-age=3600';
     _enterDashboard(email);
   }
+  if (event === 'TOKEN_REFRESHED' && session) {
+    // Renova o cookie quando o Supabase atualiza o token automaticamente
+    document.cookie = 'sb_token=' + session.access_token + '; path=/; samesite=strict; max-age=3600';
+  }
   if (event === 'SIGNED_OUT') {
-    _showLoginOverlay();
+    // Limpa cookie e redireciona para a tela de login do servidor
+    document.cookie = 'sb_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
+    window.location.href = '/auth/logout';
   }
 });
 
