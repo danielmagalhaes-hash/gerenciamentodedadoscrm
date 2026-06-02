@@ -2,9 +2,6 @@
   "rewrites": [
     { "source": "/", "destination": "/dashboard-crm.html" }
   ],
-  "functions": {
-    "api/cron/app.py": { "maxDuration": 800 }
-  },
   "crons": [
     { "path": "/api/cron/revenue",        "schedule": "*/35 * * * *" },
     { "path": "/api/cron/sessions",       "schedule": "10 * * * *"  },
