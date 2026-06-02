@@ -519,7 +519,8 @@ async function sendMagicLink() {
 
 async function signOut() {
   _dashboardReady = false;
-  await _sb.auth.signOut();
+  document.cookie = 'sb_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
+  window.location.href = '/auth/logout';
 }
 
 async function checkAuth() {
@@ -552,9 +553,12 @@ _sb.auth.onAuthStateChange(async (event, session) => {
     document.cookie = 'sb_token=' + session.access_token + '; path=/; samesite=strict; max-age=3600';
   }
   if (event === 'SIGNED_OUT') {
-    // Limpa cookie e redireciona para a tela de login do servidor
-    document.cookie = 'sb_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
-    window.location.href = '/auth/logout';
+    // Quando AUTH_ENABLED=false, o Flask controla o acesso via cookie.
+    // Ignorar SIGNED_OUT automático para não cancelar queries em andamento.
+    if (AUTH_ENABLED) {
+      document.cookie = 'sb_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
+      window.location.href = '/auth/logout';
+    }
   }
 });
 
