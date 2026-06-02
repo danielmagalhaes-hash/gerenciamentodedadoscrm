@@ -1440,6 +1440,15 @@ async function renderChannel(key){
       <div class="kpi-deltas">${k.delta||''}<span class="delta-label">${dlabel(start)} → ${dlabel(end)}</span></div>
     </div>`).join('');
 
+  // Aviso de dados fictícios — WPP e Comunidade
+  if(isWpp || isCommunity){
+    const notice = document.createElement('div');
+    notice.style.cssText = 'background:#fef3c7;border:1px solid #d97706;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#92400e;';
+    notice.innerHTML = '⚠️ <strong>Dados parcialmente fictícios:</strong> apenas a <strong>receita</strong> é real (atribuição UTM). Disparos, sessões e rankings são estimativas aguardando integração com Vekta e Sendflow.';
+    const page = document.getElementById('page-'+key);
+    if(page) page.insertBefore(notice, page.firstChild);
+  }
+
   renderFunnel('funnel-'+key, s);
 
   mkChart('chart-rev-'+key,{
