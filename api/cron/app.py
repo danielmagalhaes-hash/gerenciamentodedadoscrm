@@ -123,6 +123,37 @@ def logout():
     return resp
 
 
+@app.route('/auth/create-user', methods=['POST'])
+def create_user():
+    """Cria um novo usuário no Supabase. Só acessível por usuários autenticados."""
+    if not _get_auth_email():
+        return jsonify({'error': 'unauthorized'}), 401
+    data = request.get_json() or {}
+    email    = (data.get('email', '') or '').strip().lower()
+    password = data.get('password', '')
+    if not email or not password:
+        return jsonify({'error': 'E-mail e senha são obrigatórios.'}), 400
+    if not any(email.endswith(d) for d in _ALLOWED_DOMAINS):
+        return jsonify({'error': f'E-mail deve ser {" ou ".join(_ALLOWED_DOMAINS)}.'}), 400
+    try:
+        from supabase import create_client as _sb_admin
+        sb = _sb_admin(
+            os.environ['SUPABASE_URL'],
+            os.environ['SUPABASE_SERVICE_ROLE_KEY'],
+        )
+        sb.auth.admin.create_user({
+            'email': email,
+            'password': password,
+            'email_confirm': True,
+        })
+        return jsonify({'status': 'ok', 'email': email})
+    except Exception as e:
+        msg = str(e)
+        if 'already been registered' in msg:
+            msg = 'Este e-mail já tem acesso.'
+        return jsonify({'error': msg}), 400
+
+
 def _authorized() -> bool:
     secret = os.environ.get('CRON_SECRET', '')
     if not secret:

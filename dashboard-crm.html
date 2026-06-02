@@ -159,6 +159,7 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
     <span id="sync-status"></span>
     <button class="btn btn-ghost" id="btn-sync" onclick="triggerSync()" style="font-size:11px;padding:5px 12px;display:none">↻ Sincronizar</button>
     <span class="user" id="user-display" style="display:none"></span>
+    <button class="btn btn-ghost" id="btn-acesso" onclick="openAcessoModal()" style="font-size:11px;padding:5px 10px;display:none">Acesso</button>
     <button class="btn btn-ghost" id="btn-signout" onclick="signOut()" style="font-size:11px;padding:5px 10px;display:none">Sair</button>
   </div>
 </header>
@@ -482,6 +483,7 @@ function _enterDashboard(email) {
     ud.textContent = email;
     ud.style.display = '';
     document.getElementById('btn-signout').style.display = '';
+    document.getElementById('btn-acesso').style.display = '';
   }
   _refreshLastUpdate();
   checkCronAlerts();
@@ -2122,6 +2124,63 @@ document.getElementById('f-customer').addEventListener('change', async () => {
 });
 checkAuth(); // verifica sessão → mostra overlay ou carrega dashboard
 updateAssetFilter('resumo');
+
+// =========================================
+// MODAL DE ACESSO — criação de usuários
+// =========================================
+function openAcessoModal() {
+  document.getElementById('acesso-modal').style.display = 'flex';
+  document.getElementById('acesso-email').value = '';
+  document.getElementById('acesso-pwd').value = '';
+  document.getElementById('acesso-msg').textContent = '';
+  document.getElementById('acesso-email').focus();
+}
+function closeAcessoModal() {
+  document.getElementById('acesso-modal').style.display = 'none';
+}
+async function criarAcesso() {
+  const email = document.getElementById('acesso-email').value.trim();
+  const pwd   = document.getElementById('acesso-pwd').value;
+  const msgEl = document.getElementById('acesso-msg');
+  msgEl.style.color = '#dc2626';
+  if (!email || !pwd) { msgEl.textContent = 'Preencha e-mail e senha.'; return; }
+  document.getElementById('acesso-btn').textContent = 'Criando...';
+  try {
+    const res = await fetch('/auth/create-user', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, password: pwd}),
+    });
+    const data = await res.json();
+    if (data.error) { msgEl.textContent = data.error; }
+    else { msgEl.style.color = '#16a34a'; msgEl.textContent = `Acesso criado para ${data.email}`; }
+  } catch(e) {
+    msgEl.textContent = 'Erro ao criar acesso.';
+  }
+  document.getElementById('acesso-btn').textContent = 'Criar Acesso';
+}
 </script>
+
+<!-- Modal de criação de acesso -->
+<div id="acesso-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:36px;width:360px;box-shadow:0 8px 40px rgba(0,0,0,.18)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <strong style="font-size:16px">Criar Acesso</strong>
+      <button onclick="closeAcessoModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7785">×</button>
+    </div>
+    <label style="font-size:13px;font-weight:500">E-mail</label>
+    <input id="acesso-email" type="email" placeholder="nome@minimalclub.com.br"
+      style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;margin:4px 0 14px;box-sizing:border-box">
+    <label style="font-size:13px;font-weight:500">Senha</label>
+    <input id="acesso-pwd" type="password" placeholder="Senha temporária"
+      style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;margin:4px 0 14px;box-sizing:border-box">
+    <button id="acesso-btn" onclick="criarAcesso()"
+      style="width:100%;padding:12px;background:#111;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer">
+      Criar Acesso
+    </button>
+    <div id="acesso-msg" style="font-size:13px;margin-top:10px;min-height:18px"></div>
+  </div>
+</div>
+
 </body>
 </html>
