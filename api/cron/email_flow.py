@@ -1,51 +1,39 @@
-"""Cron: atualiza métricas de e-mail de fluxos → flow_email_metrics.
-Chamado pela Vercel todo dia às 7h UTC (4h BRT).
-"""
-from http.server import BaseHTTPRequestHandler
-import json
+"""Cron: atualiza métricas de fluxos → flow_email_metrics. Roda às 4h BRT (7h UTC)."""
 import logging
 import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
+from flask import Flask, jsonify, request
+from dotenv import load_dotenv
+
+load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
+app = Flask(__name__)
 
-def _authorized(headers) -> bool:
+
+def _authorized() -> bool:
     secret = os.environ.get('CRON_SECRET', '')
     if not secret:
         return True
-    return headers.get('Authorization', '') == f'Bearer {secret}'
+    return request.headers.get('Authorization', '') == f'Bearer {secret}'
 
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if not _authorized(self.headers):
-            self._json(401, {"error": "unauthorized"})
-            return
-        try:
-            from dotenv import load_dotenv
-            load_dotenv()
-            from ingestion.flow_metrics_daily import run_yesterday
-            run_yesterday()
-            from ingestion.alert import log_cron
-            log_cron("email_flow", "ok")
-            self._json(200, {"status": "ok", "job": "email_flow"})
-        except Exception as e:
-            logger.error({"event": "cron_failed", "job": "email_flow", "error": str(e)})
-            from ingestion.alert import send_failure_alert
-            send_failure_alert("email_flow", str(e))
-            self._json(500, {"error": str(e)})
-
-    def _json(self, code: int, body: dict) -> None:
-        data = json.dumps(body).encode()
-        self.send_response(code)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
-
-    def log_message(self, fmt, *args):
-        logger.debug(fmt, *args)
+@app.route('/api/cron/email_flow', methods=['GET'])
+def email_flow():
+    if not _authorized():
+        return jsonify({'error': 'unauthorized'}), 401
+    try:
+        from ingestion.flow_metrics_daily import run_yesterday
+        run_yesterday()
+        from ingestion.alert import log_cron
+        log_cron('email_flow', 'ok')
+        return jsonify({'status': 'ok', 'job': 'email_flow'})
+    except Exception as e:
+        logger.error({'event': 'cron_failed', 'job': 'email_flow', 'error': str(e)})
+        from ingestion.alert import send_failure_alert
+        send_failure_alert('email_flow', str(e))
+        return jsonify({'error': str(e)}), 500
