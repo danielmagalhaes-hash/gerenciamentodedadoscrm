@@ -8,11 +8,11 @@
 
 O sistema é composto por três partes que se encaixam como esteiras de uma fábrica.
 
-**Parte 1 — Ingestão (esteira de entrada):** Um conjunto de scripts Python roda a cada 30 minutos num servidor Railway. Cada script é responsável por uma fonte de dados (Shopify, Klaviyo, Vekta, Sendflow, Google Sheets). Ele puxa os dados via API, valida com Pydantic e grava nas tabelas de fatos do Supabase. Os dados de sessão (GA4 via BigQuery) chegam por um caminho diferente: uma planilha Google Sheets atualizada de hora em hora recebe o export do BigQuery, e o script Python a lê via API.
+**Parte 1 — Ingestão (esteira de entrada):** Scripts Python são executados automaticamente via **Vercel Cron Jobs** (sem Railway). Cada cron é responsável por uma fonte: Shopify a cada 35 minutos, Google Sheets a cada hora, E-mail Fluxo todo dia às 04:00 BRT, E-mail Campanha às 03:30 BRT, Formulários às 09:00 BRT. Os resultados de cada execução são registrados na tabela `cron_logs`. Os dados de sessão (GA4 via BigQuery) chegam por um caminho diferente: uma planilha Google Sheets atualizada de hora em hora recebe o export do BigQuery, e o script Python a lê via API.
 
 **Parte 2 — Banco de dados (coração do sistema):** O Supabase (PostgreSQL) armazena tudo. Tabelas de dimensão guardam referências estáticas (canais, ativos, formulários). Tabelas de fatos acumulam os dados diários de cada fonte. Views calculadas combinam essas tabelas e entregam os KPIs prontos — receita por canal, funil, pace vs meta, saúde da base — sem que o frontend precise fazer nenhum cálculo.
 
-**Parte 3 — Dashboard (esteira de saída):** O arquivo `dashboard-crm.html` existente — com layout e visual já aprovados — substitui seus dados mock por chamadas à API REST do Supabase via `supabase-js`. Cada seção do dashboard lê a view correspondente. Filtros de período, canal, tipo de cliente e ativo são passados como parâmetros na query.
+**Parte 3 — Dashboard (esteira de saída):** O arquivo `dashboard-crm.html` — com layout e visual aprovados — conecta ao Supabase via `supabase-js`. Cada seção lê a view ou tabela correspondente. Filtros de período, canal, tipo de cliente e ativo são passados como parâmetros na query. O acesso é protegido por autenticação server-side via Flask + JWT Supabase (cookie `sb_token`). O dashboard está deployado na Vercel em `gerenciamentodedadoscrm-pi.vercel.app`.
 
 O resultado: dados de Shopify, Klaviyo, Vekta, Sendflow e GA4 aparecem unificados num único painel, atualizados automaticamente, sem intervenção manual (exceto metas mensais, inseridas uma vez por mês).
 
@@ -52,11 +52,12 @@ O resultado: dados de Shopify, Klaviyo, Vekta, Sendflow e GA4 aparecem unificado
 - **Quem depende:** `scheduler`
 - **Estado:** planejado
 
-#### sync-crm (Edge Function)
-- **Responsabilidade:** Sincronizar Shopify, Sessões (Google Sheets) e métricas Klaviyo sob demanda
-- **Depende de:** Supabase Edge Functions (Deno), CSVs do Shopify e Google Sheets, Klaviyo API
-- **Quem depende:** botão "Sincronizar" no dashboard
-- **Estado:** ativo — cada fonte roda de forma independente (erro em uma não bloqueia as outras)
+#### vercel-crons
+- **Responsabilidade:** Executar ingestão automática de cada fonte nos intervalos configurados
+- **Depende de:** `api/cron/app.py` (Flask unificado), `ingestion/`, Klaviyo API, Shopify API, Google Sheets
+- **Quem depende:** nada — é o trigger de entrada de dados
+- **Estado:** ativo — crons configurados no `vercel.json`; resultados gravados em `cron_logs`
+- **Horários (BRT):** Receita: a cada 35 min | Sessões: a cada hora | E-mail Fluxo: 04:00 | E-mail Campanha: 03:30 | Formulários: 09:00
 
 #### supabase-schema
 - **Responsabilidade:** Definir e versionar o schema do banco (tabelas, views, RLS, índices) via migrations SQL
@@ -73,14 +74,21 @@ O resultado: dados de Shopify, Klaviyo, Vekta, Sendflow e GA4 aparecem unificado
 ### Diagrama (ASCII)
 
 ```
-[Shopify CSV]    ─────────────────────────┐
-[Google Sheets]  ─────────────────────────┤→ [Edge Function sync-crm] → [Supabase PostgreSQL]
-[Klaviyo API]    ─────────────────────────┘         (botão Sincronizar)        │
-                                                                           [views vw_*]
-[Input manual]   ──────────────────────────→ [fact_monthly_goals]              │
-                                                                                ↓
-                                                                      [dashboard-crm.html]
-                                                                      (supabase-js lê vw_*)
+[Shopify API]    ──→ [Vercel Cron: revenue, a cada 35min]  ──┐
+[Google Sheets]  ──→ [Vercel Cron: sessions, a cada 1h]    ──┤→ [Supabase PostgreSQL]
+[Klaviyo API]    ──→ [Vercel Cron: email_flow, 04:00 BRT]  ──┤    │
+                 ──→ [Vercel Cron: email_campaign, 03:30]  ──┤    │ [views vw_*]
+                 ──→ [Vercel Cron: forms, 09:00 BRT]       ──┘    │ [RPCs]
+                                                                    │
+[Input manual]   ──────────────────────────────────────────→ [fact_monthly_goals]
+                                                                    │
+                                                                    ↓
+                                                          [api/cron/app.py Flask]
+                                                          (auth JWT Supabase)
+                                                                    │
+                                                                    ↓
+                                                          [dashboard-crm.html]
+                                                          (supabase-js lê vw_* e RPCs)
 ```
 
 ---
@@ -358,6 +366,56 @@ Metas mensais de receita — origem: input manual.
 
 ---
 
+### Tabelas de métricas de e-mail (novas)
+
+#### flow_email_metrics
+Métricas diárias de e-mail por mensagem individual de fluxo Klaviyo — origem: `ingestion/sources/klaviyo_flow_metrics.py`.
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| flow_id | text | ID do fluxo no Klaviyo |
+| flow_name | text | Nome do fluxo |
+| message_id | text | ID da flow-message |
+| message_name | text | Nome da mensagem |
+| data | date | Data da métrica — chave de upsert com `message_id` |
+| email_enviado | integer | Disparos |
+| email_aberto | integer | Aberturas |
+| email_clicado | integer | Cliques |
+| updated_at | timestamptz | Último update |
+
+- **Índices:** `(message_id, data)` UNIQUE
+- **RLS:** SELECT para anon; INSERT/UPDATE para service_role
+- **Ingestão:** cron `email_flow` todo dia às 04:00 BRT via `flow_metrics_daily.py`
+
+#### campaign_email_metrics
+Métricas diárias de e-mail por mensagem de campanha Klaviyo — origem: `ingestion/sources/klaviyo_campaign_metrics.py`.
+
+- Estrutura idêntica a `flow_email_metrics` mas para campanhas
+- **Ingestão:** cron `email_campaign` todo dia às 03:30 BRT
+
+#### flow_utm_config
+Mapeamento de `flow_name` → `utm_campaign` para atribuição de receita por fluxo.
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| flow_name | text | Nome do fluxo (join com flow_email_metrics) |
+| utm_campaign | text | Valor de utm_campaign nos links do fluxo |
+
+#### cron_logs
+Registro de execuções dos cron jobs.
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| job | text | Nome do job: revenue, sessions, email_flow, email_campaign, forms |
+| status | text | "ok" ou "error" |
+| message | text | Mensagem de erro (se falhou) |
+| ran_at | timestamptz | Timestamp da execução |
+
+---
+
 ### Views calculadas
 
 | View | O que entrega | Tabelas usadas |
@@ -369,6 +427,15 @@ Metas mensais de receita — origem: input manual.
 | `vw_leads_daily` | Leads por dia por formulário | `fact_lead_captures`, `dim_forms` |
 | `vw_pace_vs_goals` | % atingido, projeção de fechamento, status | `fact_orders`, `fact_monthly_goals` |
 | `vw_email_health` | Saúde da base de e-mail por canal | `fact_email_health`, `dim_channels` |
+| `vw_email_channel_daily` | Disparos, aberturas, cliques por canal de e-mail por dia | `flow_email_metrics`, `campaign_email_metrics`, `dim_channels` |
+| `vw_email_asset_metrics` | Performance agregada por fluxo no período | `flow_email_metrics`, `dim_assets`, `flow_utm_config`, `fact_orders` |
+
+### Funções RPC (Supabase)
+
+| Função | Parâmetros | O que retorna |
+|---|---|---|
+| `get_email_flow_asset_metrics(p_start, p_end)` | date, date | Performance por fluxo com receita atribuída via UTM |
+| `get_email_flow_item_metrics(p_start, p_end)` | date, date | Métricas por e-mail individual (EM001, EM002...) |
 
 ---
 
@@ -438,7 +505,10 @@ Metas mensais de receita — origem: input manual.
 |---|---|---|---|---|
 | 2026-05-14 | Atribuição last-click via UTM | Única regra de atribuição implementável com os dados disponíveis | Atribuição multi-touch exige refatoração completa de `fact_orders` e views | — |
 | 2026-05-14 | Python + Railway para scheduler | Simples de implementar, menor curva de aprendizado, custo baixo | Migração para n8n ou pg_cron exige reescrever scripts de ingestão | — |
-| 2026-05-26 | Railway removido — ingestão via botão (Edge Function sync-crm) | Scheduler no Railway ficou instável; sessões acumulavam gaps. Edge Function já existia e sincroniza todas as fontes quando acionada manualmente | Ingestão automática periódica exigiria pg_cron ou serviço externo confiável | — |
+| 2026-05-26 | Railway removido — ingestão via botão (Edge Function sync-crm) | Scheduler no Railway ficou instável; sessões acumulavam gaps | Ingestão automática periódica exigiria serviço externo | — |
+| 2026-06-01 | Ingestão migrada para Vercel Cron Jobs | Edge Function substituída por crons nativos da Vercel; sem servidor externo; logs em `cron_logs` | Escalabilidade de muitas fontes pode exigir fila (Vercel Queues) | — |
+| 2026-06-01 | Autenticação server-side via Flask + JWT Supabase | Dashboard é interno; proteção simples com cookie `sb_token` verificado no servidor | Usuários externos exigiriam Supabase Auth flow completo no cliente | — |
+| 2026-06-01 | `flow_email_metrics` separada de `fact_email_sends` | Klaviyo fluxos têm granularidade de flow-message × dia; tabela dedicada evita mistura com campanhas | Unificação futura exige migration de schema e ajuste de views | — |
 | 2026-05-14 | Duas tabelas separadas para hierarquia de ativos (`dim_assets` + `dim_asset_items`) | Mais fácil de auditar, tipos bem separados, sem campo nullable confuso | Hierarquia com 3+ níveis exige nova tabela; self-join é mais simples para isso | — |
 | 2026-05-14 | BigQuery → Google Sheets → Supabase para dados de sessão | Acesso direto ao BigQuery não disponível na V1 | Migração para BigQuery direto exige service account e refatoração do módulo `ingestion-sheets` | — |
 | 2026-05-14 | Frontend em HTML puro (sem Next.js ou framework) | Dashboard já construído e aprovado; não há motivo para reescrever | Funcionalidades interativas avançadas (real-time, formulários complexos) exigirão framework | — |
@@ -480,7 +550,10 @@ Metas mensais de receita — origem: input manual.
 |---|---|---|---|
 | `dashboard-crm.html` | Dashboard visual existente — integração com Supabase | Claude (apenas substituição de dados mock) | Ninguém mexe no HTML/CSS estrutural |
 | `ingestion/db/writers.py` | Todas as funções de upsert no Supabase | Claude com cuidado — mudança aqui afeta todas as fontes | — |
-| `ingestion/scheduler.py` | Orquestração do ciclo de 30 min | Claude ao adicionar nova fonte | — |
+| `ingestion/scheduler.py` | Scheduler legado (não usado em produção — substituído por Vercel Crons) | — | Não usar em produção |
+| `api/cron/app.py` | Flask unificado: auth do dashboard + todos os endpoints de cron | Claude ao adicionar novo cron ou rota de auth | Não separar em múltiplos apps |
+| `ingestion/flow_metrics_daily.py` | Entry point do cron `email_flow` | Claude ao ajustar janela ou throttle | — |
+| `ingestion/campaign_metrics_daily.py` | Entry point do cron `email_campaign` | Claude ao ajustar janela ou throttle | — |
 | `supabase/migrations/` | Schema do banco versionado | Claude ao criar nova tabela/view (sempre nova migration) | Nunca editar migration já aplicada |
 | `.env` | Credenciais reais de todas as APIs | Apenas Daniel | Claude nunca lê ou commita |
 | `PRODUCT.md` | Fonte de verdade do domínio | Claude + Daniel quando produto muda | Claude nunca muda sem alinhamento explícito |
