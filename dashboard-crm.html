@@ -761,15 +761,30 @@ async function fetchEmailAssets(slug, start, end) {
   if (error) { console.error('fetchEmailAssets error:', error); return []; }
   return data || [];
 }
+function _efFallbackWindow() {
+  const end = new Date(); end.setDate(end.getDate() - 1);
+  const start = new Date(end); start.setDate(start.getDate() - 29);
+  return { start: start.toISOString().slice(0,10), end: end.toISOString().slice(0,10) };
+}
 async function fetchEmailFlowAssets(start, end) {
-  const {data, error} = await _sb.rpc('get_email_flow_asset_metrics', {p_start: start, p_end: end});
+  let {data, error} = await _sb.rpc('get_email_flow_asset_metrics', {p_start: start, p_end: end});
   if (error) { console.error('fetchEmailFlowAssets error:', error); return []; }
-  return data || [];
+  if (!data || !data.length) {
+    const fb = _efFallbackWindow();
+    const {data: fd} = await _sb.rpc('get_email_flow_asset_metrics', {p_start: fb.start, p_end: fb.end});
+    return fd || [];
+  }
+  return data;
 }
 async function fetchEmailFlowItems(start, end) {
-  const {data, error} = await _sb.rpc('get_email_flow_item_metrics', {p_start: start, p_end: end});
+  let {data, error} = await _sb.rpc('get_email_flow_item_metrics', {p_start: start, p_end: end});
   if (error) { console.error('fetchEmailFlowItems error:', error); return []; }
-  return data || [];
+  if (!data || !data.length) {
+    const fb = _efFallbackWindow();
+    const {data: fd} = await _sb.rpc('get_email_flow_item_metrics', {p_start: fb.start, p_end: fb.end});
+    return fd || [];
+  }
+  return data;
 }
 async function fetchFlowDailyMetrics(flowName, start, end) {
   const {data} = await _sb.from('flow_email_metrics')

@@ -14,7 +14,7 @@ BASE_URL = "https://a.klaviyo.com/api"
 REVISION = "2024-10-15"
 MAX_RETRIES = 6
 GET_THROTTLE_SECS = 0.2
-METRIC_THROTTLE_SECS = 2.0  # mesmo intervalo do N8N
+METRIC_THROTTLE_SECS = 0.3  # 3.3 req/s — dentro do limite de 5 req/s da Klaviyo
 
 # Coluna do banco -> nome do evento no Klaviyo
 FLOW_METRIC_MAP: dict[str, str] = {
