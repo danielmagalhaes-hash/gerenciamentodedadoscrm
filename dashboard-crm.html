@@ -478,12 +478,12 @@ function _enterDashboard(email) {
   _stopAuthLoading();
   document.getElementById('login-overlay').style.display = 'none';
   document.getElementById('btn-sync').style.display = '';
+  document.getElementById('btn-acesso').style.display = '';
+  document.getElementById('btn-signout').style.display = '';
   if (email) {
     const ud = document.getElementById('user-display');
     ud.textContent = email;
     ud.style.display = '';
-    document.getElementById('btn-signout').style.display = '';
-    document.getElementById('btn-acesso').style.display = '';
   }
   _refreshLastUpdate();
   checkCronAlerts();
