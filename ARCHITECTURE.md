@@ -1,6 +1,7 @@
 # ARCHITECTURE.md — Dashboard CRM · Minimal Club
 
 > Mapa vivo do sistema. Lido em TODA sessão. Atualizado ao FIM de toda sessão.
+> Última atualização: 2026-06-03
 
 ---
 
@@ -8,368 +9,234 @@
 
 O sistema é composto por três partes que se encaixam como esteiras de uma fábrica.
 
-**Parte 1 — Ingestão (esteira de entrada):** Scripts Python são executados automaticamente via **Vercel Cron Jobs** (sem Railway). Cada cron é responsável por uma fonte: Shopify a cada 35 minutos, Google Sheets a cada hora, E-mail Fluxo todo dia às 04:00 BRT, E-mail Campanha às 03:30 BRT, Formulários às 09:00 BRT. Os resultados de cada execução são registrados na tabela `cron_logs`. Os dados de sessão (GA4 via BigQuery) chegam por um caminho diferente: uma planilha Google Sheets atualizada de hora em hora recebe o export do BigQuery, e o script Python a lê via API.
+**Parte 1 — Ingestão (esteira de entrada):** Scripts Python são executados automaticamente via **Vercel Cron Jobs**. Cada cron é responsável por uma fonte: Shopify a cada 35 minutos, Google Sheets a cada hora, E-mail Fluxo todo dia às 04:00 BRT, E-mail Campanha às 00:30 BRT, Formulários às 06:00 BRT. Os resultados de cada execução são registrados na tabela `cron_logs`. Para recuperação de dados perdidos existe o endpoint `/admin/backfill/<job>` acessível via browser. Os dados de sessão (GA4 via BigQuery) chegam por um caminho diferente: uma planilha Google Sheets atualizada de hora em hora recebe o export do BigQuery, e o script Python a lê via CSV público.
 
-**Parte 2 — Banco de dados (coração do sistema):** O Supabase (PostgreSQL) armazena tudo. Tabelas de dimensão guardam referências estáticas (canais, ativos, formulários). Tabelas de fatos acumulam os dados diários de cada fonte. Views calculadas combinam essas tabelas e entregam os KPIs prontos — receita por canal, funil, pace vs meta, saúde da base — sem que o frontend precise fazer nenhum cálculo.
+**Parte 2 — Banco de dados (coração do sistema):** O Supabase (PostgreSQL) armazena tudo. Tabelas de dimensão guardam referências estáticas (canais, ativos, formulários). Tabelas de fatos acumulam os dados diários de cada fonte. Views calculadas combinam essas tabelas e entregam os KPIs prontos — receita por canal, funil, leads, saúde da base — sem que o frontend precise fazer nenhum cálculo.
 
-**Parte 3 — Dashboard (esteira de saída):** O arquivo `dashboard-crm.html` — com layout e visual aprovados — conecta ao Supabase via `supabase-js`. Cada seção lê a view ou tabela correspondente. Filtros de período, canal, tipo de cliente e ativo são passados como parâmetros na query. O acesso é protegido por autenticação server-side via Flask + JWT Supabase (cookie `sb_token`). O dashboard está deployado na Vercel em `gerenciamentodedadoscrm-pi.vercel.app`.
+**Parte 3 — Dashboard (esteira de saída):** O arquivo `dashboard-crm.html` — com layout e visual aprovados — conecta ao Supabase via `supabase-js`. Cada seção lê a view ou tabela correspondente diretamente. O acesso é protegido por autenticação server-side via Flask + JWT Supabase (cookie `sb_token`). **AUTH_ENABLED está temporariamente em False** — reativar em breve. O dashboard está deployado na Vercel em **`gerenciadorcrm.vercel.app`** (projeto `gerenciamentodedadoscrmoficial`).
 
-O resultado: dados de Shopify, Klaviyo, Vekta, Sendflow e GA4 aparecem unificados num único painel, atualizados automaticamente, sem intervenção manual (exceto metas mensais, inseridas uma vez por mês).
+O resultado: dados de Shopify, Klaviyo e GA4 aparecem unificados num único painel, atualizados automaticamente. Vekta (WhatsApp) e Sendflow (Comunidade) ainda sem integração — aguardam Fase 2.
 
 ---
 
 ## 2. Diagrama de módulos
 
-### Lista de módulos
+### Módulos ativos em produção
 
 #### ingestion-shopify
 - **Responsabilidade:** Buscar pedidos pagos do Shopify e gravá-los em `fact_orders`
-- **Depende de:** Shopify Admin API, `ingestion/db/writers.py`, `ingestion/models/shopify_models.py`
-- **Quem depende:** `scheduler`
-- **Estado:** planejado
+- **Entry point:** `api/cron/revenue.py` → `ingestion/main.py:run_smart_shopify_ingestion()`
+- **Fontes:** `ingestion/sources/shopify.py`, `ingestion/models/shopify_models.py`
+- **Cron:** `*/35 * * * *` — a cada 35 minutos
+- **Estado:** ✅ ativo — 103 execuções ok nos últimos 7 dias
 
-#### ingestion-klaviyo
-- **Responsabilidade:** Buscar métricas de e-mail (fluxos, campanhas, formulários, saúde da base) do Klaviyo e gravá-las nas tabelas fact correspondentes
-- **Depende de:** Klaviyo API, `ingestion/db/writers.py`, `ingestion/models/klaviyo_models.py`
-- **Quem depende:** `scheduler`
-- **Estado:** planejado
+#### ingestion-sessions
+- **Responsabilidade:** Ler CSV do Google Sheets (export BigQuery) e gravar em `fact_sessions` e `fact_sessions_utm`
+- **Entry point:** `api/cron/sessions.py` → `ingestion/main.py:run_sheets_ingestion()`
+- **Fontes:** `ingestion/sources/google_sheets.py`, `ingestion/models/sheets_models.py`
+- **Cron:** `10 * * * *` — a cada hora aos :10
+- **Estado:** ✅ ativo
 
-#### ingestion-vekta
-- **Responsabilidade:** Buscar métricas de disparos e respostas de WhatsApp do Vekta e gravá-las em `fact_wpp_sends`
-- **Depende de:** Vekta API (ou export CSV como fallback), `ingestion/db/writers.py`
-- **Quem depende:** `scheduler`
-- **Estado:** planejado
+#### ingestion-email-flow
+- **Responsabilidade:** Buscar métricas diárias de e-mails de fluxos Klaviyo e gravar em `flow_email_metrics`
+- **Entry point:** `api/cron/email_flow.py` → `ingestion/flow_metrics_daily.py:run_yesterday()`
+- **Fontes:** `ingestion/sources/klaviyo_flow_metrics.py`
+- **Cron:** `0 7 * * *` — todo dia às 04:00 BRT (07:00 UTC)
+- **Lookback:** D-2 a D-1 (recupera automaticamente se falhou no dia anterior)
+- **maxDuration:** 800s (configurado em `vercel.json`)
+- **Estado:** ✅ ativo
 
-#### ingestion-sendflow
-- **Responsabilidade:** Buscar dados de participantes e disparos da Comunidade WhatsApp do Sendflow
-- **Depende de:** Sendflow API (ou export manual como fallback), `ingestion/db/writers.py`
-- **Quem depende:** `scheduler`
-- **Estado:** planejado
+#### ingestion-email-campaign
+- **Responsabilidade:** Buscar métricas diárias de campanhas Klaviyo e gravar em `campaign_email_metrics`
+- **Entry point:** `api/cron/email_campaign.py` → `ingestion/campaign_metrics_daily.py:run_yesterday()`
+- **Fontes:** `ingestion/sources/klaviyo_campaign_metrics.py`
+- **Cron:** `30 3 * * *` — todo dia às 00:30 BRT (03:30 UTC)
+- **Lookback:** D-2 a D-1
+- **Estado:** ✅ ativo
 
-#### ingestion-sheets
-- **Responsabilidade:** Ler dados de Sessões/ATC/BCO da planilha Google Sheets (export do BigQuery) e gravá-los em `fact_sessions`
-- **Depende de:** Google Sheets API (gspread), `ingestion/db/writers.py`
-- **Quem depende:** `scheduler`
-- **Estado:** planejado
+#### ingestion-forms
+- **Responsabilidade:** Buscar métricas de formulários + saúde da base Klaviyo → `fact_lead_captures`, `dim_forms`, `fact_email_health`
+- **Entry point:** `api/cron/forms.py` → `ingestion/main.py:run_forms_ingestion()`
+- **Fontes:** `ingestion/sources/klaviyo.py` (fetch_forms, fetch_active_base_count, fetch_form_metrics_since)
+- **Cron:** `0 9 * * *` — todo dia às 06:00 BRT (09:00 UTC)
+- **Lookback:** sempre rebusca D-1 completo (dados Klaviyo têm lag de ~24h)
+- **Estado:** ✅ ativo
 
 #### vercel-crons
-- **Responsabilidade:** Executar ingestão automática de cada fonte nos intervalos configurados
-- **Depende de:** `api/cron/app.py` (Flask unificado), `ingestion/`, Klaviyo API, Shopify API, Google Sheets
-- **Quem depende:** nada — é o trigger de entrada de dados
-- **Estado:** ativo — crons configurados no `vercel.json`; resultados gravados em `cron_logs`
-- **Horários (BRT):** Receita: a cada 35 min | Sessões: a cada hora | E-mail Fluxo: 04:00 | E-mail Campanha: 03:30 | Formulários: 09:00
+- **Responsabilidade:** Orquestrar e executar todos os crons automaticamente
+- **Configuração:** `vercel.json` — 5 crons + routing + maxDuration
+- **Projeto Vercel:** `gerenciamentodedadoscrmoficial` → `gerenciadorcrm.vercel.app`
+- **Estado:** ✅ ativo
+
+#### backfill-admin
+- **Responsabilidade:** Permitir recuperação manual de dados perdidos via browser
+- **Entry point:** `api/cron/app.py` rota `/admin/backfill/<job>`
+- **Jobs disponíveis:** `email_flow`, `email_campaign`, `sessions`, `forms`, `revenue`
+- **Parâmetros:** `?since=YYYY-MM-DD`, `?until=YYYY-MM-DD`
+- **Exemplo:** `https://gerenciadorcrm.vercel.app/admin/backfill/email_flow?since=2026-06-02`
+- **Estado:** ✅ ativo (acessível enquanto AUTH_ENABLED=False)
 
 #### supabase-schema
-- **Responsabilidade:** Definir e versionar o schema do banco (tabelas, views, RLS, índices) via migrations SQL
-- **Depende de:** nada
-- **Quem depende:** todos os módulos de ingestão e o dashboard
-- **Estado:** ativo
+- **Responsabilidade:** Definir e versionar schema do banco via migrations SQL
+- **Localização:** `supabase/migrations/` — 32 migrations aplicadas
+- **Estado:** ✅ ativo
 
 #### dashboard-frontend
-- **Responsabilidade:** Renderizar os dados do Supabase no dashboard HTML existente
-- **Depende de:** Supabase API REST (views `vw_*`), `supabase-js`
-- **Quem depende:** nada (camada final)
-- **Estado:** ativo
+- **Responsabilidade:** Renderizar dados do Supabase no dashboard HTML
+- **Arquivo:** `dashboard-crm.html`
+- **Lê:** tabelas diretas (`flow_email_metrics`, `campaign_email_metrics`, `flow_utm_config`, `fact_orders`) + views `vw_*`
+- **Estado:** ✅ ativo
+
+### Módulos planejados (Fase 2)
+
+#### ingestion-vekta (não iniciado)
+- **Responsabilidade:** Buscar métricas de WhatsApp Fluxo e Campanha → `fact_wpp_sends`
+- **Bloqueio:** confirmar se Vekta tem API pública
+
+#### ingestion-sendflow (não iniciado)
+- **Responsabilidade:** Buscar dados da Comunidade WhatsApp → `fact_community_members`, `fact_community_sends`
+- **Bloqueio:** confirmar acesso à API Sendflow
 
 ### Diagrama (ASCII)
 
 ```
-[Shopify API]    ──→ [Vercel Cron: revenue, a cada 35min]  ──┐
-[Google Sheets]  ──→ [Vercel Cron: sessions, a cada 1h]    ──┤→ [Supabase PostgreSQL]
-[Klaviyo API]    ──→ [Vercel Cron: email_flow, 04:00 BRT]  ──┤    │
-                 ──→ [Vercel Cron: email_campaign, 03:30]  ──┤    │ [views vw_*]
-                 ──→ [Vercel Cron: forms, 09:00 BRT]       ──┘    │ [RPCs]
-                                                                    │
+[Shopify API]    ──→ [Cron: revenue, a cada 35min]       ──┐
+[Google Sheets]  ──→ [Cron: sessions, a cada 1h]         ──┤
+[Klaviyo API]    ──→ [Cron: email_flow, 04:00 BRT]       ──┤→ [Supabase PostgreSQL]
+                 ──→ [Cron: email_campaign, 00:30 BRT]   ──┤    │
+                 ──→ [Cron: forms, 06:00 BRT]            ──┘    │ [views vw_*]
+                                                                  │ [tabelas diretas]
 [Input manual]   ──────────────────────────────────────────→ [fact_monthly_goals]
-                                                                    │
-                                                                    ↓
-                                                          [api/cron/app.py Flask]
-                                                          (auth JWT Supabase)
-                                                                    │
-                                                                    ↓
-                                                          [dashboard-crm.html]
-                                                          (supabase-js lê vw_* e RPCs)
+[Admin backfill] ──→ [/admin/backfill/<job>]             ──→     │
+                                                                  ↓
+                                                        [api/cron/app.py Flask]
+                                                        (auth JWT Supabase — temp. desativado)
+                                                                  │
+                                                                  ↓
+                                                        [dashboard-crm.html]
+                                                        (supabase-js lê views e tabelas)
 ```
 
 ---
 
 ## 3. Entidades e modelo de dados
 
-### dim_channels
+### Tabelas em produção com dados ativos
+
+#### dim_channels
 Tabela de referência dos 5 canais. Criada uma vez, raramente alterada.
 
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| name | text | sim | — | Ex: "E-mail Fluxo" — nome oficial exibido no dashboard |
-| slug | text | sim | — | Ex: "email_flow" — usado no código e queries |
-| utm_source | text | sim | — | Ex: "email" |
-| utm_medium | text | não | null | Ex: "flow" — null para Comunidade |
-| primary_kpi | text | sim | — | Ex: "receita_inscrito" ou "receita_disparo" |
-| created_at | timestamptz | sim | now() | — |
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| name | text | Ex: "E-mail Fluxo" |
+| slug | text | Ex: "email_flow" — UNIQUE |
+| utm_source | text | Ex: "email" |
+| utm_medium | text | Ex: "flow" — null para Comunidade |
+| primary_kpi | text | "receita_inscrito" ou "receita_disparo" |
+| created_at | timestamptz | — |
 
-- **Índices:** `slug` (UNIQUE)
-- **RLS:** SELECT para anon; nenhuma escrita para anon ou service_role (inserido via migration)
-- **Soft delete:** não — canal é referência imutável
-- **Invariantes:** os 5 slugs canônicos nunca mudam sem ADR: `email_flow`, `email_campaign`, `wpp_flow`, `wpp_campaign`, `wpp_community`
+- **Slugs canônicos (nunca mudam sem ADR):** `email_flow`, `email_campaign`, `wpp_flow`, `wpp_campaign`, `wpp_community`
+- **RLS:** SELECT para anon; sem escrita externa
 
 ---
 
-### dim_assets
-Ativos pai: fluxos e campanhas. Um por linha.
+#### dim_assets
+Ativos pai: fluxos e campanhas sincronizados das ferramentas de origem.
 
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| external_id | text | sim | — | ID na ferramenta de origem (Klaviyo, Vekta, Sendflow) |
-| channel_id | uuid | sim | — | FK → dim_channels |
-| name | text | sim | — | Nome conforme aparece na ferramenta de origem |
-| type | text | sim | — | "flow" ou "campaign" |
-| is_active | boolean | sim | true | false quando desativado na ferramenta de origem |
-| source_tool | text | sim | — | "klaviyo" | "vekta" | "sendflow" |
-| created_at | timestamptz | sim | now() | — |
-| updated_at | timestamptz | sim | now() | atualizado a cada sync |
-| ingested_at | timestamptz | sim | now() | último sync bem-sucedido |
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| external_id | text | ID no Klaviyo/Vekta/Sendflow |
+| channel_id | uuid | FK → dim_channels |
+| name | text | Nome na ferramenta de origem |
+| type | text | "flow" ou "campaign" |
+| is_active | boolean | false = desativado na ferramenta |
+| source_tool | text | "klaviyo" \| "vekta" \| "sendflow" |
+| created_at / updated_at / ingested_at | timestamptz | — |
 
-- **Chaves estrangeiras:** `channel_id` → `dim_channels.id`
-- **Índices:** `(external_id, source_tool)` UNIQUE, `channel_id`, `is_active`
-- **RLS:** SELECT para anon; INSERT/UPDATE apenas para service_role
-- **Soft delete:** não — `is_active = false` é o estado de "desativado"; histórico de métricas preservado
-- **Invariantes:** `type` só aceita "flow" ou "campaign"; `source_tool` só aceita os três valores listados
+- **Índices:** `(external_id, source_tool)` UNIQUE
+- **RLS:** SELECT anon; INSERT/UPDATE service_role
 
 ---
 
-### dim_asset_items
-Ativos filho: e-mails individuais (dentro de fluxos/campanhas de e-mail) e templates de WhatsApp.
+#### dim_asset_items
+Ativos filho: e-mails individuais dentro de fluxos/campanhas.
 
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| external_id | text | sim | — | ID na ferramenta de origem |
-| asset_id | uuid | sim | — | FK → dim_assets (ativo pai) |
-| name | text | sim | — | Subject line (e-mail) ou preview do template (WA) |
-| type | text | sim | — | "email" ou "wpp_template" |
-| position | integer | não | null | Posição no fluxo (1, 2, 3...) |
-| created_at | timestamptz | sim | now() | — |
-| updated_at | timestamptz | sim | now() | — |
-| ingested_at | timestamptz | sim | now() | — |
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| external_id | text | ID na ferramenta de origem |
+| asset_id | uuid | FK → dim_assets |
+| name | text | Subject line ou preview do template |
+| type | text | "email" ou "wpp_template" |
+| position | integer | Posição no fluxo (1, 2, 3…) |
+| created_at / updated_at / ingested_at | timestamptz | — |
 
-- **Chaves estrangeiras:** `asset_id` → `dim_assets.id`
-- **Índices:** `(external_id, type)` UNIQUE, `asset_id`
-- **RLS:** SELECT para anon; INSERT/UPDATE apenas para service_role
-- **Soft delete:** não — item removido do fluxo mantém histórico, apenas para de receber dados novos
-- **Invariantes:** `type` só aceita "email" ou "wpp_template"; `type` deve ser consistente com o `source_tool` do ativo pai
+- **Índices:** `(external_id, type)` UNIQUE
 
 ---
 
-### dim_forms
+#### dim_forms
 Formulários e popups de captação de leads do Klaviyo.
 
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| external_id | text | sim | — | Klaviyo Form ID — UNIQUE |
-| name | text | sim | — | Nome do formulário (deve incluir tipo e local) |
-| type | text | sim | — | "popup" | "form" | "embed" |
-| position | text | não | null | Ex: "Home", "Footer", "Landing SS25" |
-| is_active | boolean | sim | true | — |
-| created_at | timestamptz | sim | now() | — |
-| ingested_at | timestamptz | sim | now() | — |
-
-- **Índices:** `external_id` UNIQUE
-- **RLS:** SELECT para anon; escrita apenas para service_role
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| external_id | text | Klaviyo Form ID — UNIQUE |
+| name | text | Nome do formulário |
+| type | text | "popup" \| "form" \| "embed" |
+| position | text | Ex: "Home", "Footer" |
+| is_active | boolean | — |
+| created_at / ingested_at | timestamptz | — |
 
 ---
 
-### fact_orders
+#### fact_orders
 Pedidos pagos do Shopify com atribuição de canal por UTM.
 
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| order_id | text | sim | — | Shopify Order ID — chave de upsert UNIQUE |
-| order_date | date | sim | — | Data do pedido |
-| revenue_brl | numeric(12,2) | sim | — | Valor do pedido em reais |
-| attributed_channel_id | uuid | não | null | FK → dim_channels — null se sem UTM de CRM |
-| utm_source | text | não | null | Valor bruto da UTM |
-| utm_medium | text | não | null | Valor bruto da UTM |
-| utm_campaign | text | não | null | Valor bruto da UTM |
-| shopify_customer_id | text | sim | — | ID do cliente no Shopify |
-| is_first_purchase | boolean | sim | — | true se orders_count = 1 |
-| ingested_at | timestamptz | sim | now() | — |
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| order_id | text | Shopify Order ID — UNIQUE |
+| order_date | date | Data do pedido |
+| revenue_brl | numeric(12,2) | Valor em reais |
+| attributed_channel_id | uuid | FK → dim_channels — null se sem UTM de CRM |
+| utm_source / utm_medium / utm_campaign / utm_term / utm_content | text | Valores brutos da UTM |
+| shopify_customer_id | text | ID do cliente |
+| is_first_purchase | boolean | true se orders_count = 1 |
+| ingested_at | timestamptz | — |
 
-- **Chaves estrangeiras:** `attributed_channel_id` → `dim_channels.id`
-- **Índices:** `order_id` UNIQUE, `order_date`, `attributed_channel_id`, `is_first_purchase`
-- **RLS:** SELECT para anon; INSERT/UPDATE apenas para service_role
-- **Soft delete:** não — apenas pedidos pagos entram; cancelamentos ignorados na V1
-- **Invariantes:** `revenue_brl` > 0; pedidos sem UTM de CRM têm `attributed_channel_id = null` e NÃO são distribuídos entre canais
+- **Invariante:** `revenue_brl > 0`; pedidos sem UTM de CRM ficam com `attributed_channel_id = null`
 
 ---
 
-### fact_sessions
-Sessões, ATC e BCO por canal por dia — origem: Google Sheets (export BigQuery).
+#### fact_sessions
+Sessões, ATC e BCO por canal por dia — origem: Google Sheets / BigQuery.
 
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| date | date | sim | — | — |
-| channel_id | uuid | sim | — | FK → dim_channels |
-| sessions | integer | sim | 0 | — |
-| add_to_cart | integer | sim | 0 | ATC |
-| begin_checkout | integer | sim | 0 | BCO |
-| ingested_at | timestamptz | sim | now() | — |
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| date | date | — |
+| channel_id | uuid | FK → dim_channels |
+| sessions | integer | — |
+| add_to_cart | integer | ATC |
+| begin_checkout | integer | BCO |
+| orders | integer | Compras atribuídas |
+| revenue_brl | numeric | Receita atribuída |
+| ingested_at | timestamptz | — |
 
-- **Chaves estrangeiras:** `channel_id` → `dim_channels.id`
-- **Índices:** `(date, channel_id)` UNIQUE, `date`
-- **RLS:** SELECT para anon; escrita apenas para service_role
-- **Invariantes:** `sessions >= add_to_cart >= begin_checkout >= 0`
-
----
-
-### fact_email_sends
-Métricas de e-mail por item de ativo (e-mail individual) por dia — origem: Klaviyo.
-
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| date | date | sim | — | — |
-| asset_item_id | uuid | sim | — | FK → dim_asset_items (type = "email") |
-| sends | integer | sim | 0 | Disparos |
-| opens | integer | sim | 0 | Aberturas |
-| clicks | integer | sim | 0 | Cliques |
-| bounces | integer | sim | 0 | — |
-| spam_complaints | integer | sim | 0 | — |
-| unsubscribes | integer | sim | 0 | — |
-| ingested_at | timestamptz | sim | now() | — |
-
-- **Chaves estrangeiras:** `asset_item_id` → `dim_asset_items.id`
-- **Índices:** `(date, asset_item_id)` UNIQUE, `date`
-- **RLS:** SELECT para anon; escrita apenas para service_role
-- **Invariantes:** `sends >= opens >= clicks >= 0`; `bounces + spam_complaints + unsubscribes <= sends`
-
----
-
-### fact_wpp_sends
-Métricas de WhatsApp por template por dia — origem: Vekta.
-
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| date | date | sim | — | — |
-| asset_item_id | uuid | sim | — | FK → dim_asset_items (type = "wpp_template") |
-| sends | integer | sim | 0 | Disparos |
-| responses | integer | sim | 0 | Respostas (Acessar) |
-| unlocks | integer | sim | 0 | Destravar Objeção |
-| handoffs_to_sales | integer | sim | 0 | Leads ao Comercial |
-| ingested_at | timestamptz | sim | now() | — |
-
-- **Chaves estrangeiras:** `asset_item_id` → `dim_asset_items.id`
-- **Índices:** `(date, asset_item_id)` UNIQUE, `date`
-- **RLS:** SELECT para anon; escrita apenas para service_role
-- **Invariantes:** `responses <= sends`; `handoffs_to_sales <= responses`
-
----
-
-### fact_community_members
-Snapshot diário de participantes da Comunidade WhatsApp — origem: Sendflow.
-
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| date | date | sim | — | UNIQUE |
-| total_members | integer | sim | — | Snapshot do dia |
-| entries | integer | sim | 0 | Entradas no dia |
-| exits | integer | sim | 0 | Saídas no dia |
-| ingested_at | timestamptz | sim | now() | — |
-
-- **Índices:** `date` UNIQUE
-- **RLS:** SELECT para anon; escrita apenas para service_role
-- **Invariantes:** `total_members > 0`
-
----
-
-### fact_community_sends
-Disparos de mensagens da Comunidade — origem: Sendflow.
-
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| external_id | text | sim | — | ID da mensagem no Sendflow — UNIQUE |
-| asset_id | uuid | sim | — | FK → dim_assets |
-| sent_date | date | sim | — | Data do disparo |
-| sends | integer | sim | 0 | Total de disparos |
-| ingested_at | timestamptz | sim | now() | — |
-
-- **Chaves estrangeiras:** `asset_id` → `dim_assets.id`
-- **Índices:** `external_id` UNIQUE, `sent_date`
-- **RLS:** SELECT para anon; escrita apenas para service_role
-
----
-
-### fact_lead_captures
-Performance de formulários e popups por dia — origem: Klaviyo Forms API.
-
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| date | date | sim | — | — |
-| form_id | uuid | sim | — | FK → dim_forms |
-| views | integer | sim | 0 | Visualizações |
-| subscribers | integer | sim | 0 | Inscrições |
-| ingested_at | timestamptz | sim | now() | — |
-
-- **Chaves estrangeiras:** `form_id` → `dim_forms.id`
-- **Índices:** `(date, form_id)` UNIQUE, `date`
-- **RLS:** SELECT para anon; escrita apenas para service_role
-- **Invariantes:** `subscribers <= views`
-
----
-
-### fact_email_health
-Saúde da base de e-mail por canal por dia — origem: Klaviyo API.
-
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| date | date | sim | — | — |
-| channel_id | uuid | sim | — | FK → dim_channels (apenas canais de e-mail) |
-| active_base_count | integer | sim | — | Engajados 90d — segmento Klaviyo |
-| delivery_rate | numeric(5,4) | não | null | Entregues / Enviados |
-| bounce_rate | numeric(5,4) | não | null | Bounces / Enviados |
-| spam_complaint_rate | numeric(6,5) | não | null | Reclamações / Entregues |
-| opt_out_rate | numeric(5,4) | não | null | Unsubscribes / Entregues |
-| ingested_at | timestamptz | sim | now() | — |
-
-- **Chaves estrangeiras:** `channel_id` → `dim_channels.id`
 - **Índices:** `(date, channel_id)` UNIQUE
-- **RLS:** SELECT para anon; escrita apenas para service_role
-- **Invariantes:** `channel_id` deve ser de canal de e-mail (slug: "email_flow" ou "email_campaign")
 
 ---
 
-### fact_monthly_goals
-Metas mensais de receita — origem: input manual.
-
-| Coluna | Tipo | Obrigatório | Default | Notas |
-|---|---|---|---|---|
-| id | uuid | sim | gen_random_uuid() | PK |
-| month | date | sim | — | Sempre dia 1 do mês — UNIQUE |
-| goal_first_purchase_brl | numeric(12,2) | sim | — | Meta receita 1ª compra |
-| goal_repurchase_brl | numeric(12,2) | sim | — | Meta receita recompra |
-| goal_total_brl | numeric(12,2) | sim | — | Meta receita total CRM |
-| created_at | timestamptz | sim | now() | — |
-| updated_at | timestamptz | sim | now() | — |
-
-- **Índices:** `month` UNIQUE
-- **RLS:** SELECT para anon; INSERT/UPDATE para service_role (inserção manual via Supabase Table Editor)
-- **Invariantes:** `goal_total_brl = goal_first_purchase_brl + goal_repurchase_brl`
+#### fact_sessions_utm
+Versão granular de `fact_sessions` — quebrada por UTM completa. Alimentada pelo cron de sessões. **Reservada para Fase 3 (mapeamento de UTMs)** — não consumida atualmente.
 
 ---
-
-### Tabelas de métricas de e-mail (novas)
 
 #### flow_email_metrics
-Métricas diárias de e-mail por mensagem individual de fluxo Klaviyo — origem: `ingestion/sources/klaviyo_flow_metrics.py`.
+Métricas diárias por e-mail individual de fluxo Klaviyo — **tabela principal do E-mail Fluxo**.
 
 | Coluna | Tipo | Notas |
 |---|---|---|
@@ -378,21 +245,23 @@ Métricas diárias de e-mail por mensagem individual de fluxo Klaviyo — origem
 | flow_name | text | Nome do fluxo |
 | message_id | text | ID da flow-message |
 | message_name | text | Nome da mensagem |
-| data | date | Data da métrica — chave de upsert com `message_id` |
+| data | date | Data da métrica |
 | email_enviado | integer | Disparos |
 | email_aberto | integer | Aberturas |
 | email_clicado | integer | Cliques |
-| updated_at | timestamptz | Último update |
+| updated_at | timestamptz | — |
 
 - **Índices:** `(message_id, data)` UNIQUE
-- **RLS:** SELECT para anon; INSERT/UPDATE para service_role
-- **Ingestão:** cron `email_flow` todo dia às 04:00 BRT via `flow_metrics_daily.py`
+- **Lida por:** dashboard direto + `vw_email_channel_daily`
+
+---
 
 #### campaign_email_metrics
-Métricas diárias de e-mail por mensagem de campanha Klaviyo — origem: `ingestion/sources/klaviyo_campaign_metrics.py`.
+Métricas diárias por campanha Klaviyo — **tabela principal do E-mail Campanha**. Estrutura idêntica a `flow_email_metrics`.
 
-- Estrutura idêntica a `flow_email_metrics` mas para campanhas
-- **Ingestão:** cron `email_campaign` todo dia às 03:30 BRT
+- **Lida por:** `vw_campaign_email_metrics`
+
+---
 
 #### flow_utm_config
 Mapeamento de `flow_name` → `utm_campaign` para atribuição de receita por fluxo.
@@ -400,161 +269,232 @@ Mapeamento de `flow_name` → `utm_campaign` para atribuição de receita por fl
 | Coluna | Tipo | Notas |
 |---|---|---|
 | id | uuid | PK |
-| flow_name | text | Nome do fluxo (join com flow_email_metrics) |
-| utm_campaign | text | Valor de utm_campaign nos links do fluxo |
+| flow_name | text | Join com flow_email_metrics |
+| utm_campaign | text | Valor de utm_campaign nos links |
 
-#### cron_logs
-Registro de execuções dos cron jobs.
+- **Lida por:** dashboard (cálculo de receita por fluxo)
+
+---
+
+#### fact_lead_captures
+Performance de formulários e popups por dia — origem: Klaviyo Forms API.
 
 | Coluna | Tipo | Notas |
 |---|---|---|
 | id | uuid | PK |
-| job | text | Nome do job: revenue, sessions, email_flow, email_campaign, forms |
+| date | date | — |
+| form_id | uuid | FK → dim_forms |
+| impressions | integer | Visualizações |
+| submissions | integer | Inscrições |
+| ingested_at | timestamptz | — |
+
+- **Índices:** `(date, form_id)` UNIQUE
+- **Lida por:** `vw_leads_daily`, `vw_form_performance`
+
+---
+
+#### fact_email_health
+Saúde da base de e-mail por canal — origem: Klaviyo API (segmento Engaged 90d).
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| date | date | — |
+| channel_id | uuid | FK → dim_channels (apenas e-mail) |
+| active_base_count | integer | Engajados 90d |
+| delivery_rate / bounce_rate / spam_complaint_rate / opt_out_rate | numeric | Taxas |
+| ingested_at | timestamptz | — |
+
+- **Estado:** dados gravados pelo cron `forms` — **ainda não conectada ao dashboard** (dashboard usa mock). Próxima versão substituirá o mock por `vw_email_health`.
+
+---
+
+#### cron_logs
+Registro de execuções dos cron jobs — usado pelo banner de alertas no dashboard.
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| job | text | revenue, sessions, email_flow, email_campaign, forms |
 | status | text | "ok" ou "error" |
-| message | text | Mensagem de erro (se falhou) |
+| message | text | Mensagem de erro |
 | ran_at | timestamptz | Timestamp da execução |
 
 ---
 
-### Views calculadas
+### Tabelas para fases futuras (vazias)
 
-| View | O que entrega | Tabelas usadas |
+| Tabela | Fase | Aguarda |
 |---|---|---|
-| `vw_crm_daily_summary` | Receita, compras, sessões, conversão, TKM, RPS por canal e dia | `fact_orders`, `fact_sessions`, `dim_channels` |
-| `vw_channel_kpis` | KPIs agregados por canal para qualquer período | `vw_crm_daily_summary`, `fact_email_sends`, `fact_wpp_sends` |
-| `vw_asset_performance` | Performance completa por fluxo/campanha (ativo pai) | `fact_email_sends`, `fact_wpp_sends`, `fact_orders`, `dim_assets`, `dim_asset_items` |
-| `vw_funnel_crm` | Sessões → ATC → BCO → Compras por canal | `fact_sessions`, `fact_orders`, `dim_channels` |
-| `vw_leads_daily` | Leads por dia por formulário | `fact_lead_captures`, `dim_forms` |
-| `vw_pace_vs_goals` | % atingido, projeção de fechamento, status | `fact_orders`, `fact_monthly_goals` |
-| `vw_email_health` | Saúde da base de e-mail por canal | `fact_email_health`, `dim_channels` |
-| `vw_email_channel_daily` | Disparos, aberturas, cliques por canal de e-mail por dia | `flow_email_metrics`, `campaign_email_metrics`, `dim_channels` |
-| `vw_email_asset_metrics` | Performance agregada por fluxo no período | `flow_email_metrics`, `dim_assets`, `flow_utm_config`, `fact_orders` |
+| `fact_wpp_sends` | 2 | Integração Vekta |
+| `fact_wpp_subscribers` | 2 | Integração Vekta |
+| `fact_community_members` | 2 | Integração Sendflow |
+| `fact_community_sends` | 2 | Integração Sendflow |
+| `fact_monthly_goals` | 2 | Input manual das metas (estrutura pronta, dashboard tem placeholder) |
+| `dim_utm_mappings` | 3 | Classificação manual de UTMs não reconhecidas |
+| `flow_utm_pending` | 3 | Processamento de UTMs pendentes (dashboard já escreve, nada processa) |
 
-### Funções RPC (Supabase)
+---
 
-| Função | Parâmetros | O que retorna |
+### Views em produção
+
+| View | O que entrega | Lida por |
 |---|---|---|
-| `get_email_flow_asset_metrics(p_start, p_end)` | date, date | Performance por fluxo com receita atribuída via UTM |
-| `get_email_flow_item_metrics(p_start, p_end)` | date, date | Métricas por e-mail individual (EM001, EM002...) |
+| `vw_channel_daily` | Receita, compras, sessões, conversão, TKM, RPS por canal e dia | Dashboard (Resumo + todas as abas de canal) |
+| `vw_revenue_first_repeat` | Receita por (data, tipo) — 1ª compra vs recompra | Dashboard (gráfico diário 1ª vs Recompra) |
+| `vw_revenue_by_channel_type` | Receita por (data, canal, tipo) | Dashboard (filtro Tipo de Cliente) |
+| `vw_leads_daily` | Leads por dia por formulário | Dashboard (Captação de Leads) |
+| `vw_form_performance` | Performance acumulada por formulário | Dashboard (tabela Formulários e Popups) |
+| `vw_email_channel_daily` | Disparos, aberturas, cliques por canal de e-mail por dia | Dashboard (Métricas específicas E-mail Fluxo/Campanha) |
+| `vw_campaign_email_metrics` | Performance por campanha com receita atribuída | Dashboard (tabela E-mail Campanha) |
+
+### Views prontas mas não conectadas ao dashboard (próxima versão)
+
+| View | O que entrega | Quando conectar |
+|---|---|---|
+| `vw_email_health` | Saúde da base (entregabilidade, base ativa) | Quando substituir o mock de saúde da base no Resumo CRM |
+| `vw_pace_vs_goals` | % atingido, projeção de fechamento vs meta | Quando `fact_monthly_goals` for preenchida |
+
+### Funções do banco
+
+| Função | Tipo | Uso |
+|---|---|---|
+| `rls_auto_enable` | utilitário | Ativa RLS automaticamente em novas tabelas |
+| `fn_check_wpp_subscriber_asset` | trigger | Validação de subscribers WhatsApp — ativa quando Fase 2 entrar |
 
 ---
 
 ## 4. Fluxos de dados
 
-### Fluxo 1 — Ingestão automática a cada 30 minutos (Shopify, Klaviyo, Vekta, Sendflow)
+### Fluxo 1 — Cron de receita (Shopify, a cada 35min)
 
-1. **Trigger:** `scheduler.py` via `schedule.every(30).minutes` rodando no Railway
-2. **Função que executa:** `ingestion/scheduler.py` → chama cada módulo `ingestion/sources/*.py`
-3. **Validações:**
-   - Dados brutos de API validados via Pydantic antes de qualquer escrita (R7)
-   - Shopify: apenas `financial_status = "paid"` processado (R5)
-   - UTM: `utm_source` + `utm_medium` mapeados para `channel_id` via `dim_channels`; sem match → `attributed_channel_id = null`
-4. **Operações de banco (em ordem):**
-   - Upsert em `dim_assets` (sincroniza ativos ativos/inativos)
-   - Upsert em `dim_asset_items` (sincroniza e-mails e templates)
-   - Upsert em `fact_orders` por `order_id`
-   - Upsert em `fact_email_sends` por `(date, asset_item_id)`
-   - Upsert em `fact_wpp_sends` por `(date, asset_item_id)`
-   - Upsert em `fact_community_members` por `date`
-   - Upsert em `fact_community_sends` por `external_id`
-   - Upsert em `fact_lead_captures` por `(date, form_id)`
-   - Upsert em `fact_email_health` por `(date, channel_id)`
-5. **Resposta:** Log estruturado com contagem de registros por tabela e timestamp
-6. **Side effects:** Se qualquer fonte falhar, log de erro com contexto; ingestão das outras fontes continua (R8)
+1. **Trigger:** Vercel Cron → `GET /api/cron/revenue`
+2. **Executa:** `run_smart_shopify_ingestion()` — busca pedidos desde MAX(order_date) - 2 dias
+3. **Validações:** apenas `financial_status = "paid"`; UTM mapeada para `channel_id`
+4. **Grava:** upsert em `fact_orders` por `order_id`
+5. **Log:** `cron_logs` com status ok/error
 
 ---
 
-### Fluxo 2 — Ingestão de dados de sessão (BigQuery → Sheets → Supabase, horária)
+### Fluxo 2 — Cron de sessões (Google Sheets, horário)
 
-1. **Trigger:** `scheduler.py` via `schedule.every(1).hours`
-2. **Função que executa:** `ingestion/sources/google_sheets.py`
-3. **Validações:**
-   - Verifica que colunas esperadas existem na planilha (date, channel_slug, sessions, add_to_cart, begin_checkout)
-   - Valida tipos via Pydantic
-   - `sessions >= add_to_cart >= begin_checkout` (invariante)
-4. **Operações de banco:**
-   - Upsert em `fact_sessions` por `(date, channel_id)`
-5. **Side effects:** Log com data mais recente processada e contagem de linhas
+1. **Trigger:** Vercel Cron → `GET /api/cron/sessions`
+2. **Executa:** `run_sheets_ingestion()` — lê CSV completo de `GOOGLE_SHEETS_CSV_URL`
+3. **Validações:** colunas obrigatórias, parse de data BR, tipos Pydantic
+4. **Grava:** upsert em `fact_sessions` + `fact_sessions_utm` por `(date, channel_id)`
+5. **Log:** `cron_logs`
 
 ---
 
-### Fluxo 3 — Consulta ao dashboard (tempo real, sob demanda)
+### Fluxo 3 — Cron de e-mail fluxo (Klaviyo, diário às 04h BRT)
 
-1. **Trigger:** Usuário abre `dashboard-crm.html` ou aplica filtro
-2. **Função que executa:** JavaScript no `dashboard-crm.html` via `supabase-js`
-3. **Validações:** Filtros de período e canal validados no frontend antes de enviar query
-4. **Operações de banco:**
-   - SELECT nas views `vw_*` com filtros de data e channel_slug
-   - Cada seção do dashboard faz sua própria query à view correspondente
-5. **Resposta:** JSON retornado pelo Supabase; dashboard renderiza sem cálculo
-6. **Side effects:** Se Supabase retornar erro, exibir mensagem de dados indisponíveis com último timestamp conhecido
+1. **Trigger:** Vercel Cron → `GET /api/cron/email_flow`
+2. **Executa:** `run_yesterday()` — busca D-2 a D-1
+3. **Processo:** lista todos os fluxos ativos → para cada fluxo, busca flow-messages → para cada mensagem × 3 métricas, chama `metric-aggregates` API (0,3s de throttle)
+4. **Grava:** upsert em `flow_email_metrics` por `(message_id, data)`
+5. **Duração:** ~5-10 minutos (300+ chamadas à API) — maxDuration: 800s
 
 ---
 
-### Fluxo 4 — Input de metas mensais (manual, mensal)
+### Fluxo 4 — Cron de e-mail campanha (Klaviyo, diário às 00h30 BRT)
 
-1. **Trigger:** Daniel acessa o Supabase Table Editor no início de cada mês
-2. **Operação de banco:** INSERT ou UPDATE em `fact_monthly_goals` para o mês vigente
-3. **Pós-condição:** `vw_pace_vs_goals` automaticamente passa a usar os novos valores
+1. **Trigger:** Vercel Cron → `GET /api/cron/email_campaign`
+2. **Executa:** `run_yesterday()` — busca D-2 a D-1
+3. **Grava:** upsert em `campaign_email_metrics` por `(message_id, data)`
+
+---
+
+### Fluxo 5 — Cron de formulários (Klaviyo, diário às 06h BRT)
+
+1. **Trigger:** Vercel Cron → `GET /api/cron/forms`
+2. **Executa:** `run_forms_ingestion()` — sempre rebusca desde D-1 (corrige parciais do Klaviyo)
+3. **Grava:** `dim_forms` + `fact_lead_captures` + `fact_email_health`
+
+---
+
+### Fluxo 6 — Consulta ao dashboard (tempo real, sob demanda)
+
+1. **Trigger:** usuário abre `gerenciadorcrm.vercel.app` ou aplica filtro
+2. **Auth:** Flask verifica cookie `sb_token` (temporariamente desativado)
+3. **Queries:** `supabase-js` consulta views e tabelas com filtros de data e channel_slug
+4. **Renderização:** JavaScript recebe JSON e renderiza — sem cálculo de KPI no frontend
+
+---
+
+### Fluxo 7 — Backfill manual (sob demanda)
+
+1. **Trigger:** abrir URL no browser → `GET /admin/backfill/<job>?since=YYYY-MM-DD`
+2. **Executa:** a função de ingestão correspondente com a data informada
+3. **Exemplos de uso:**
+   - `/admin/backfill/email_flow?since=2026-06-02` — recupera dia específico
+   - `/admin/backfill/forms?since=2026-06-02` — corrige dados parciais
+   - `/admin/backfill/sessions` — refaz última leitura do Sheets
+4. **Log:** registra em `cron_logs` ao terminar
 
 ---
 
 ## 5. Decisões arquiteturais já tomadas
 
-| Data | Decisão | Por quê | Impede no futuro | ADR |
-|---|---|---|---|---|
-| 2026-05-14 | Atribuição last-click via UTM | Única regra de atribuição implementável com os dados disponíveis | Atribuição multi-touch exige refatoração completa de `fact_orders` e views | — |
-| 2026-05-14 | Python + Railway para scheduler | Simples de implementar, menor curva de aprendizado, custo baixo | Migração para n8n ou pg_cron exige reescrever scripts de ingestão | — |
-| 2026-05-26 | Railway removido — ingestão via botão (Edge Function sync-crm) | Scheduler no Railway ficou instável; sessões acumulavam gaps | Ingestão automática periódica exigiria serviço externo | — |
-| 2026-06-01 | Ingestão migrada para Vercel Cron Jobs | Edge Function substituída por crons nativos da Vercel; sem servidor externo; logs em `cron_logs` | Escalabilidade de muitas fontes pode exigir fila (Vercel Queues) | — |
-| 2026-06-01 | Autenticação server-side via Flask + JWT Supabase | Dashboard é interno; proteção simples com cookie `sb_token` verificado no servidor | Usuários externos exigiriam Supabase Auth flow completo no cliente | — |
-| 2026-06-01 | `flow_email_metrics` separada de `fact_email_sends` | Klaviyo fluxos têm granularidade de flow-message × dia; tabela dedicada evita mistura com campanhas | Unificação futura exige migration de schema e ajuste de views | — |
-| 2026-05-14 | Duas tabelas separadas para hierarquia de ativos (`dim_assets` + `dim_asset_items`) | Mais fácil de auditar, tipos bem separados, sem campo nullable confuso | Hierarquia com 3+ níveis exige nova tabela; self-join é mais simples para isso | — |
-| 2026-05-14 | BigQuery → Google Sheets → Supabase para dados de sessão | Acesso direto ao BigQuery não disponível na V1 | Migração para BigQuery direto exige service account e refatoração do módulo `ingestion-sheets` | — |
-| 2026-05-14 | Frontend em HTML puro (sem Next.js ou framework) | Dashboard já construído e aprovado; não há motivo para reescrever | Funcionalidades interativas avançadas (real-time, formulários complexos) exigirão framework | — |
-| 2026-05-14 | Apenas pedidos pagos no sistema (sem cancelamentos/reembolsos) | Bases da Minimal Club só expõem pedidos pagos; simplifica V1 | Incluir reembolsos na V2 exige campo `status` em `fact_orders` e ajuste nas views | — |
+| Data | Decisão | Por quê | Impede no futuro |
+|---|---|---|---|
+| 2026-05-14 | Atribuição last-click via UTM | Única regra implementável com os dados disponíveis | Atribuição multi-touch exige refatoração de `fact_orders` e views |
+| 2026-05-14 | Frontend em HTML puro (sem framework) | Dashboard aprovado; sem motivo para reescrever | Funcionalidades avançadas exigirão framework |
+| 2026-05-14 | BigQuery → Google Sheets → Supabase para sessões | Acesso direto ao BigQuery indisponível na V1 | Migração para BigQuery direto exige service account |
+| 2026-05-14 | Apenas pedidos pagos no sistema | Bases da Minimal Club só expõem pedidos pagos | Reembolsos exigirão campo `status` em `fact_orders` |
+| 2026-05-26 | Railway removido — ingestão via Edge Function | Scheduler no Railway ficou instável | — |
+| 2026-06-01 | Migração para Vercel Cron Jobs | Crons nativos da Vercel; sem servidor externo; logs em `cron_logs` | Muitas fontes simultâneas podem exigir Vercel Queues |
+| 2026-06-01 | Autenticação server-side via Flask + JWT Supabase | Dashboard interno; cookie `sb_token` | Usuários externos exigiriam Supabase Auth flow completo |
+| 2026-06-01 | `flow_email_metrics` separada de `fact_email_sends` | Granularidade de flow-message × dia; evita mistura com campanhas | Unificação futura exige migration |
+| 2026-06-03 | Dashboard consulta `flow_email_metrics` diretamente (sem RPC) | RPCs não retornavam dados no browser (supabase-js); query direta + JS resolve | — |
+| 2026-06-03 | Crons com lookback D-2 a D-1 | Auto-recuperação: se cron falhar um dia, a próxima execução recupera automaticamente | — |
+| 2026-06-03 | Endpoint `/admin/backfill/<job>` para recuperação manual | Permite backfill via browser sem precisar de CRON_SECRET ou CLI | Requer AUTH_ENABLED=True para segurança em produção |
 
 ---
 
 ## 6. Pontos frágeis conhecidos
 
-### Google Sheets como intermediário de dados de sessão
-- **Onde:** `ingestion/sources/google_sheets.py` + planilha externa
-- **Por que é frágil:** Se o nome de uma coluna mudar na planilha, ou o export do BigQuery for interrompido, a ingestão de sessões para silenciosamente
-- **O que vai estourar primeiro:** Dashboard sem dados de RPS e Conversão após mudança não comunicada na planilha
-- **Plano:** Aceitar e monitorar na V1; migrar para BigQuery API direto na V2 com service account
+### Google Sheets como intermediário de sessões
+- **Risco:** mudança no nome de coluna da planilha quebra a ingestão silenciosamente
+- **Sinal de falha:** dashboard sem dados de Sessões/RPS/Conversão; banner vermelho
+- **Plano:** aceitar na V1; migrar para BigQuery API direto na V2
 
-### Vekta como fonte de WhatsApp
-- **Onde:** `ingestion/sources/vekta.py`
-- **Por que é frágil:** Não confirmado se Vekta tem API — pode precisar de fallback para export CSV manual
-- **O que vai estourar primeiro:** Ingestão de WhatsApp não funciona se não houver API
-- **Plano:** Confirmar antes de implementar. Se não tiver API, implementar ingestion via CSV com upload manual e criar processo documentado
+### Cron de e-mail fluxo — volume de chamadas API
+- **Risco:** 34 fluxos × ~10 mensagens × 3 métricas = ~1.000 chamadas/dia à Klaviyo. Se novos fluxos forem criados, o tempo de execução aumenta
+- **Sinal de falha:** ausência de log em `cron_logs` para `email_flow`
+- **Plano:** monitorar. Se ultrapassar 600s, implementar cache de `flow_id`/`message_id` no banco para evitar re-busca a cada execução
 
-### Hubspot como fonte de inscritos WhatsApp
-- **Onde:** `ingestion/sources/klaviyo.py` (após migração) ou `ingestion/sources/hubspot.py` (temporário)
-- **Por que é frágil:** Fonte temporária; migração para Klaviyo está planejada mas sem data
-- **O que vai estourar primeiro:** Métrica de Receita/Inscrito do WhatsApp Fluxo incorreta se migração acontecer sem aviso
-- **Plano:** Implementar com flag de fonte (`SUBSCRIBERS_SOURCE=hubspot|klaviyo`) em `.env` para troca sem reescrita
+### AUTH_ENABLED=False temporariamente
+- **Risco:** dashboard e endpoint `/admin/backfill/*` acessíveis publicamente
+- **Plano:** reativar assim que as contas de acesso forem criadas (endpoint `/auth/create-user` disponível)
 
-### Consistência de UTMs nos links de CRM
-- **Onde:** Links de e-mail e WhatsApp nas ferramentas de envio
-- **Por que é frágil:** Se UTMs não seguirem o padrão, pedidos ficam sem atribuição — receita some do dashboard
-- **O que vai estourar primeiro:** Receita CRM total menor que real; canais com zero receita sem motivo técnico
-- **Plano:** Auditar UTMs antes do primeiro go-live (ver `PRODUCT.md` seção 8)
+### UTMs inconsistentes nos links de CRM
+- **Risco:** pedidos sem UTM ficam fora do dashboard (`attributed_channel_id = null`)
+- **Plano:** auditar todos os links ativos antes de qualquer análise de atribuição
+
+### fact_email_health não conectada ao dashboard
+- **Risco:** dados de saúde da base são coletados mas não exibidos (dashboard usa valores hardcoded)
+- **Plano:** substituir mock por `vw_email_health` na próxima versão
 
 ---
 
 ## 7. Inventário de arquivos críticos
 
-| Caminho | Responsabilidade | Quem deve mexer | Quem NÃO deve mexer |
-|---|---|---|---|
-| `dashboard-crm.html` | Dashboard visual existente — integração com Supabase | Claude (apenas substituição de dados mock) | Ninguém mexe no HTML/CSS estrutural |
-| `ingestion/db/writers.py` | Todas as funções de upsert no Supabase | Claude com cuidado — mudança aqui afeta todas as fontes | — |
-| `ingestion/scheduler.py` | Scheduler legado (não usado em produção — substituído por Vercel Crons) | — | Não usar em produção |
-| `api/cron/app.py` | Flask unificado: auth do dashboard + todos os endpoints de cron | Claude ao adicionar novo cron ou rota de auth | Não separar em múltiplos apps |
-| `ingestion/flow_metrics_daily.py` | Entry point do cron `email_flow` | Claude ao ajustar janela ou throttle | — |
-| `ingestion/campaign_metrics_daily.py` | Entry point do cron `email_campaign` | Claude ao ajustar janela ou throttle | — |
-| `supabase/migrations/` | Schema do banco versionado | Claude ao criar nova tabela/view (sempre nova migration) | Nunca editar migration já aplicada |
-| `.env` | Credenciais reais de todas as APIs | Apenas Daniel | Claude nunca lê ou commita |
-| `PRODUCT.md` | Fonte de verdade do domínio | Claude + Daniel quando produto muda | Claude nunca muda sem alinhamento explícito |
-| `CLAUDE.md` | Regras de operação do agente | Claude + Daniel quando convenções mudam | — |
+| Caminho | Responsabilidade | Quem deve mexer |
+|---|---|---|
+| `dashboard-crm.html` | Dashboard visual — fonte única de verdade do frontend | Apenas substituição de dados/lógica; HTML/CSS estrutural intocável |
+| `api/cron/app.py` | Flask: serve dashboard + auth + 5 endpoints de cron + admin backfill | Claude ao adicionar rota ou cron |
+| `api/cron/email_flow.py` | Entry point do cron email_flow (maxDuration: 800s) | Claude ao ajustar janela ou throttle |
+| `api/cron/email_campaign.py` | Entry point do cron email_campaign | Claude ao ajustar janela |
+| `api/cron/revenue.py` | Entry point do cron de receita Shopify | — |
+| `api/cron/sessions.py` | Entry point do cron de sessões | — |
+| `api/cron/forms.py` | Entry point do cron de formulários | — |
+| `ingestion/db/writers.py` | Todas as funções de upsert no Supabase | Claude com cuidado — afeta todas as fontes |
+| `ingestion/flow_metrics_daily.py` | Runner do email_flow + função `run_for_flow` | Claude ao ajustar lookback ou throttle |
+| `ingestion/campaign_metrics_daily.py` | Runner do email_campaign | Claude ao ajustar lookback |
+| `ingestion/main.py` | Entry points: shopify, sessions, forms | Claude ao ajustar janelas |
+| `ingestion/sources/klaviyo_flow_metrics.py` | Lógica de busca de métricas de fluxo via Klaviyo API | Claude com cuidado — throttle sensível |
+| `supabase/migrations/` | Schema do banco versionado | NUNCA editar migration já aplicada — sempre criar nova |
+| `vercel.json` | Crons, routing, maxDuration | Claude ao adicionar cron ou ajustar timeout |
+| `.env` | Credenciais reais | Apenas Daniel — Claude nunca lê nem commita |
+| `PRODUCT.md` | Fonte de verdade do domínio | Claude + Daniel quando produto muda |
+| `CLAUDE.md` | Regras de operação do agente | Claude + Daniel quando convenções mudam |

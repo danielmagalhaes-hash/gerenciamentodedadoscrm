@@ -17,9 +17,9 @@
 | Cliente Supabase | **supabase-py** | 2.x | Escrita e leitura no banco via Python |
 | Google Sheets | **gspread** | 6.x | Leitura da planilha com dados de sessão (BigQuery → Sheets) |
 | Configuração | **python-dotenv** | 1.x | Variáveis de ambiente |
-| Agendamento | **schedule** | 1.x | Rodar ingestão a cada 30 minutos |
-| Frontend | **HTML + Vanilla JS + supabase-js** | supabase-js 2.x | Dashboard existente — substituição de dados mock por API real |
-| Deploy scripts | **Railway ou VPS simples** | — | Rodar o scheduler Python em produção |
+| Agendamento | **Vercel Cron Jobs** | — | 5 crons automáticos configurados em `vercel.json` — substituiu Railway e Edge Function |
+| Frontend | **HTML + Vanilla JS + supabase-js** | supabase-js 2.x | Dashboard existente em `dashboard-crm.html` |
+| Deploy | **Vercel** | — | Projeto `gerenciamentodedadoscrmoficial` → `gerenciadorcrm.vercel.app` |
 
 ### Bibliotecas permitidas por tipo de problema
 - **HTTP externo:** `httpx` — nunca `requests` (httpx suporta async nativamente)
@@ -185,6 +185,16 @@ gerenciamentodedadoscrm/
 - **Motivo:** rastrear frescor dos dados; o dashboard exibe "atualizado há X minutos".
 - **Violação:** impossível saber se dado está desatualizado por falha de ingestão.
 
+### R13. Toda nova versão de funcionalidade é criada e validada localmente antes de subir para a Vercel.
+- **Motivo:** a Vercel é produção. Um deploy com bug quebra o dashboard para todos os usuários imediatamente, sem rollback automático. Testar localmente antes é a única garantia de que o que vai ao ar funciona.
+- **Fluxo obrigatório:**
+  1. Implementar a mudança localmente
+  2. Testar rodando `python -m http.server 8080` (frontend) e os scripts Python com `.env` local
+  3. Confirmar que o comportamento esperado está correto
+  4. Só então commitar e fazer `git push empresa main` para deploy na Vercel
+- **O que conta como "nova versão":** qualquer mudança em `dashboard-crm.html`, `api/cron/app.py`, scripts de ingestão, ou `vercel.json`
+- **Violação:** bug em produção que interrompe visualização de dados ou falha de ingestão silenciosa
+
 ---
 
 ## 5. Glossário do domínio
@@ -193,7 +203,7 @@ gerenciamentodedadoscrm/
 
 | Termo | Definição (1 linha) | Como aparece no código |
 |---|---|---|
-| **Disparo** | Unidade de envio de e-mail ou WhatsApp. Termo canônico — nunca "envio". | `total_sends`, `sends_count`, `fact_email_sends` |
+| **Disparo** | Unidade de envio de e-mail ou WhatsApp. Termo canônico — nunca "envio". | `total_sends`, `sends_count`, `email_enviado` |
 | **Fluxo** | Automação contínua 24/7 disparada por evento do cliente. | `flow`, `is_flow`, `dim_assets.type = 'flow'` |
 | **Campanha** | Disparo manual pontual para lista específica. | `campaign`, `is_campaign`, `dim_assets.type = 'campaign'` |
 | **Ativo** | Qualquer elemento CRM que gera receita (fluxo, campanha, e-mail, template). Hierarquia: pai → filho. | `asset`, `asset_id`, `parent_asset_id`, `dim_assets` |
@@ -220,8 +230,9 @@ gerenciamentodedadoscrm/
 3. Criar ou atualizar função em `ingestion/db/writers.py`:
    - `upsert_[tabela](records: list[Model]) -> int` (retorna quantidade gravada)
    - Upsert por chave única (nunca insert simples — risco de duplicata)
-4. Adicionar chamada em `ingestion/scheduler.py`
-5. Atualizar `ARCHITECTURE.md` (seção de fontes e fluxo de dados)
+4. Adicionar rota em `api/cron/app.py` e novo arquivo `api/cron/[fonte].py` como entry point
+5. Registrar o cron em `vercel.json` com schedule e path
+6. Atualizar `ARCHITECTURE.md` (seção de fontes e fluxo de dados)
 
 ### Como adicionar uma migration no Supabase
 
@@ -437,3 +448,9 @@ supabase db --execute "SELECT COUNT(*), MAX(ingested_at) FROM fact_orders;"
 8. **Nunca criar migration sem nome descritivo** e cabeçalho de reversibilidade.
 9. **Nunca usar "envio"** — sempre "disparo" (R10).
 10. **Antes de conectar nova fonte de dados:** verificar se `PRODUCT.md` seção 5 já descreve o fluxo esperado. Se não descreve, atualizar `PRODUCT.md` primeiro.
+11. **Toda nova versão é criada e validada localmente antes de subir para a Vercel (R13).** Fluxo obrigatório:
+    - Implementar localmente
+    - Testar com `python -m http.server 8080` (dashboard) e scripts Python com `.env` real
+    - Confirmar comportamento correto
+    - Só então commitar e fazer push para deploy na Vercel
+    Não existe exceção a esta regra — nem para "hotfix urgente".
