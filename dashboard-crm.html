@@ -723,8 +723,8 @@ async function checkCronAlerts() {
 // =========================================
 // AUTENTICAÇÃO — Supabase Auth (magic link)
 // =========================================
-// Para reativar o login: mudar AUTH_ENABLED para true
-const AUTH_ENABLED = false;
+const AUTH_ENABLED = true;
+let _userRole = 'view'; // preenchido após login: 'view' | 'edit' | 'admin'
 
 const ALLOWED_DOMAINS = ['@minimalclub.com.br', '@moonventures.com'];
 const REDIRECT_URL = 'https://gerenciamentodedadoscrm.vercel.app/';
@@ -752,13 +752,37 @@ function _showLoginOverlay(msg, isError) {
   }
 }
 
+function _applyRoleUI() {
+  const ROLE_LABEL = {admin:'Admin', edit:'Edição', view:'Visualização'};
+  const ROLE_COLOR = {admin:'#2563eb', edit:'#10b981', view:'#94a3b8'};
+  // Botão Acesso: só admin
+  const btnAcesso = document.getElementById('btn-acesso');
+  if (btnAcesso) btnAcesso.style.display = _userRole === 'admin' ? '' : 'none';
+  // Badge de role ao lado do e-mail
+  const ud = document.getElementById('user-display');
+  if (ud && ud.dataset.roleSet !== '1') {
+    ud.dataset.roleSet = '1';
+    const badge = document.createElement('span');
+    badge.style.cssText = `background:${ROLE_COLOR[_userRole]||'#94a3b8'};color:#fff;padding:1px 7px;border-radius:8px;font-size:9px;font-weight:700;vertical-align:middle;margin-left:6px`;
+    badge.textContent = ROLE_LABEL[_userRole] || 'Visualização';
+    ud.appendChild(badge);
+  }
+  // Botões de criação no Log: ocultos para view
+  const logBtns = document.getElementById('log-header-btns');
+  if (logBtns) {
+    logBtns.querySelectorAll('.btn:not(.btn-ghost)').forEach(b => {
+      b.style.display = _userRole === 'view' ? 'none' : '';
+    });
+  }
+}
+
 function _enterDashboard(email) {
   if (_dashboardReady) return; // já carregado — não renderiza de novo
   _dashboardReady = true;
   _stopAuthLoading();
   document.getElementById('login-overlay').style.display = 'none';
   document.getElementById('btn-sync').style.display = '';
-  document.getElementById('btn-acesso').style.display = '';
+  document.getElementById('btn-acesso').style.display = 'none'; // visível só para admin (via _applyRoleUI)
   document.getElementById('btn-signout').style.display = '';
   if (email) {
     const ud = document.getElementById('user-display');
@@ -814,7 +838,9 @@ async function checkAuth() {
     _showLoginOverlay('E-mail não autorizado. Use @minimalclub.com.br ou @moonventures.com.', true);
     return;
   }
+  _userRole = session.user.app_metadata?.role || 'view';
   _enterDashboard(email);
+  _applyRoleUI();
 }
 
 _sb.auth.onAuthStateChange(async (event, session) => {
@@ -825,9 +851,10 @@ _sb.auth.onAuthStateChange(async (event, session) => {
       _showLoginOverlay('E-mail não autorizado. Use @minimalclub.com.br ou @moonventures.com.', true);
       return;
     }
-    // Salva token no cookie para verificação server-side (Flask)
+    _userRole = session.user.app_metadata?.role || 'view';
     document.cookie = 'sb_token=' + session.access_token + '; path=/; samesite=strict; max-age=3600';
     _enterDashboard(email);
+    _applyRoleUI();
   }
   if (event === 'TOKEN_REFRESHED' && session) {
     // Renova o cookie quando o Supabase atualiza o token automaticamente
@@ -3109,12 +3136,13 @@ function _renderLogDetail(){
     ${it.learning?`<div class="detail-section"><h4>Aprendizado</h4><p>${it.learning}</p></div>`:''}
     ${it.attachment?`<div class="detail-section"><h4>Anexo</h4><p><a href="${it.attachment}" target="_blank" style="color:var(--primary)">${it.attachment}</a></p></div>`:''}`;
   const canFinish=it.kind==='test'&&it.status==='running';
+  const canEdit=_userRole!=='view';
   document.getElementById('log-panel-foot').innerHTML=`
-    <button class="btn btn-danger btn-sm" onclick="deleteLogItem('${it.id}')">Excluir</button>
+    ${canEdit?`<button class="btn btn-danger btn-sm" onclick="deleteLogItem('${it.id}')">Excluir</button>`:''}
     <div style="flex:1"></div>
     <button class="btn btn-ghost btn-sm" onclick="closeLogPanel()">Fechar</button>
-    ${canFinish?`<button class="btn btn-success btn-sm" onclick="openLogFinishPanel('${it.id}')">Finalizar teste</button>`:''}
-    <button class="btn btn-sm" onclick="openLogPanel('edit','${it.kind}','${it.id}')">Editar</button>`;
+    ${canEdit&&canFinish?`<button class="btn btn-success btn-sm" onclick="openLogFinishPanel('${it.id}')">Finalizar teste</button>`:''}
+    ${canEdit?`<button class="btn btn-sm" onclick="openLogPanel('edit','${it.kind}','${it.id}')">Editar</button>`:''}`.trim();
 }
 
 // =========================================
@@ -3250,11 +3278,12 @@ function _renderLogCampaignDetail(){
     </div>
     ${!isEC&&it.offer?`<div class="detail-section"><h4>Oferta da campanha</h4><p style="background:#fef3c7;padding:10px 12px;border-radius:6px;border-left:3px solid #f59e0b">${it.offer}</p></div>`:''}
     <div class="detail-section"><h4>Bases selecionadas (${it.bases?.length||0})</h4><p>${basesHtml||'—'}</p></div>`;
+  const _canEditCamp = _userRole !== 'view';
   document.getElementById('log-panel-foot').innerHTML=`
-    <button class="btn btn-danger btn-sm" onclick="deleteLogItem('${it.id}')">Excluir</button>
+    ${_canEditCamp?`<button class="btn btn-danger btn-sm" onclick="deleteLogItem('${it.id}')">Excluir</button>`:''}
     <div style="flex:1"></div>
     <button class="btn btn-ghost btn-sm" onclick="closeLogPanel()">Fechar</button>
-    <button class="btn" onclick="openLogCampaignPanel('edit','${it.kind}','${it.id}')">Editar</button>`;
+    ${_canEditCamp?`<button class="btn" onclick="openLogCampaignPanel('edit','${it.kind}','${it.id}')">Editar</button>`:''}`.trim();
 }
 
 // =========================================
@@ -3380,6 +3409,7 @@ function openAcessoModal() {
   document.getElementById('acesso-modal').style.display = 'flex';
   document.getElementById('acesso-email').value = '';
   document.getElementById('acesso-pwd').value = '';
+  document.getElementById('acesso-role').value = 'admin';
   document.getElementById('acesso-msg').textContent = '';
   document.getElementById('acesso-email').focus();
 }
@@ -3389,6 +3419,7 @@ function closeAcessoModal() {
 async function criarAcesso() {
   const email = document.getElementById('acesso-email').value.trim();
   const pwd   = document.getElementById('acesso-pwd').value;
+  const role  = document.getElementById('acesso-role').value;
   const msgEl = document.getElementById('acesso-msg');
   msgEl.style.color = '#dc2626';
   if (!email || !pwd) { msgEl.textContent = 'Preencha e-mail e senha.'; return; }
@@ -3397,11 +3428,15 @@ async function criarAcesso() {
     const res = await fetch('/auth/create-user', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email, password: pwd}),
+      body: JSON.stringify({email, password: pwd, role}),
     });
     const data = await res.json();
     if (data.error) { msgEl.textContent = data.error; }
-    else { msgEl.style.color = '#16a34a'; msgEl.textContent = `Acesso criado para ${data.email}`; }
+    else {
+      const labels = {admin:'Admin', edit:'Edição', view:'Visualização'};
+      msgEl.style.color = '#16a34a';
+      msgEl.textContent = `Acesso criado para ${data.email} · ${labels[data.role]||data.role}`;
+    }
   } catch(e) {
     msgEl.textContent = 'Erro ao criar acesso.';
   }
@@ -3422,6 +3457,12 @@ async function criarAcesso() {
     <label style="font-size:13px;font-weight:500">Senha</label>
     <input id="acesso-pwd" type="password" placeholder="Senha temporária"
       style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;margin:4px 0 14px;box-sizing:border-box">
+    <label style="font-size:13px;font-weight:500">Nível de acesso</label>
+    <select id="acesso-role" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;margin:4px 0 14px;box-sizing:border-box">
+      <option value="view">Visualização — só leitura</option>
+      <option value="edit">Edição — cria e edita no Log CRM</option>
+      <option value="admin" selected>Admin — acesso total + criar usuários</option>
+    </select>
     <button id="acesso-btn" onclick="criarAcesso()"
       style="width:100%;padding:12px;background:#111;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer">
       Criar Acesso

@@ -50,8 +50,7 @@ def _get_auth_email() -> str | None:
     return 'authenticated'
 
 
-# Para reativar o login: mudar AUTH_ENABLED para True
-_AUTH_ENABLED = False
+_AUTH_ENABLED = True
 
 _LOGIN_HTML = f"""<!DOCTYPE html>
 <html lang="pt-BR">
@@ -135,12 +134,15 @@ def logout():
 
 @app.route('/auth/create-user', methods=['POST'])
 def create_user():
-    """Cria um novo usuário no Supabase. Só acessível por usuários autenticados."""
+    """Cria um novo usuário no Supabase. Só acessível por admins autenticados."""
     if not _get_auth_email():
         return jsonify({'error': 'unauthorized'}), 401
     data = request.get_json() or {}
     email    = (data.get('email', '') or '').strip().lower()
     password = data.get('password', '')
+    role     = data.get('role', 'view')
+    if role not in ('view', 'edit', 'admin'):
+        role = 'view'
     if not email or not password:
         return jsonify({'error': 'E-mail e senha são obrigatórios.'}), 400
     if not any(email.endswith(d) for d in _ALLOWED_DOMAINS):
@@ -155,8 +157,9 @@ def create_user():
             'email': email,
             'password': password,
             'email_confirm': True,
+            'app_metadata': {'role': role},
         })
-        return jsonify({'status': 'ok', 'email': email})
+        return jsonify({'status': 'ok', 'email': email, 'role': role})
     except Exception as e:
         msg = str(e)
         if 'already been registered' in msg:
