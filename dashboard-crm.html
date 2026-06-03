@@ -128,6 +128,155 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
 #sync-status{font-size:11px;color:var(--muted);white-space:nowrap}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{display:inline-block;animation:spin .9s linear infinite}
+
+/* ====== Log CRM ====== */
+:root{--shadow-lg:0 10px 25px rgba(15,27,45,.12)}
+.log-page{display:none}
+.log-page.active{display:block}
+.log-tab-btn{background:transparent;border:none;padding:14px 16px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:.15s}
+.log-tab-btn:hover{color:var(--text)}
+.log-tab-btn.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.btn-warn{background:var(--warning);color:#fff}
+.btn-warn:hover{background:#d97706}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-danger:hover{background:#dc2626}
+.btn-success{background:var(--success);color:#fff}
+.btn-success:hover{background:#059669}
+.btn-sm{padding:5px 10px;font-size:11px}
+.sub-tabs{display:inline-flex;gap:4px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:4px;margin-bottom:18px;box-shadow:var(--shadow)}
+.sub-tabs button{background:transparent;border:none;padding:7px 14px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border-radius:5px;white-space:nowrap}
+.sub-tabs button:hover{color:var(--text)}
+.sub-tabs button.active{background:#0f1b2d;color:#fff}
+.sub-page{display:none}
+.sub-page.active{display:block}
+.log-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.log-search-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.log-search-row select,.log-search-row input{border:1px solid var(--border);background:#fff;padding:7px 10px;border-radius:6px;font-size:12px;color:var(--text);min-width:140px}
+.log-search-row input[type=search]{min-width:220px}
+.log-search-row select:focus,.log-search-row input:focus{outline:none;border-color:var(--primary)}
+.table-wrap{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
+.table-wrap table{width:100%;border-collapse:collapse;font-size:12.5px}
+.table-wrap thead th{background:#f8fafc;text-align:left;padding:11px 14px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;border-bottom:1px solid var(--border)}
+.table-wrap tbody td{padding:12px 14px;border-bottom:1px solid #f1f4f8;vertical-align:middle}
+.table-wrap tbody tr{cursor:pointer;transition:background .12s}
+.table-wrap tbody tr:hover{background:#fafbfd}
+.title-cell{font-weight:600;color:var(--text)}
+.kind-badge{display:inline-block;padding:1px 7px;border-radius:8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-right:6px;vertical-align:middle}
+.kb-action{background:#dbeafe;color:#1e40af}
+.kb-test{background:#fef3c7;color:#92400e}
+.tag-status-planned{background:#f1f4f8;color:#475569}
+.tag-status-running{background:#dbeafe;color:#1e40af}
+.tag-status-done{background:#d1fae5;color:#047857}
+.tag-status-paused{background:#fef3c7;color:#92400e}
+.tag-status-cancelled{background:#fee2e2;color:#991b1b}
+.tag-result-positive{background:#d1fae5;color:#047857}
+.tag-result-neutral{background:#f1f4f8;color:#475569}
+.tag-result-negative{background:#fee2e2;color:#991b1b}
+.tag-type-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.empty-state{text-align:center;padding:50px 20px;color:var(--muted);background:#fff;border:1px solid var(--border);border-radius:10px}
+.empty-state h3{font-size:15px;color:var(--text);margin-bottom:6px;font-weight:600}
+.empty-state p{font-size:13px;margin-bottom:14px}
+.test-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:var(--shadow);transition:.15s}
+.test-card:hover{border-color:var(--primary)}
+.test-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+.test-card-head h4{font-size:14px;font-weight:700;flex:1}
+.test-card-meta{font-size:11px;color:var(--muted);margin-bottom:10px}
+.test-card-info{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;padding:10px 12px;background:#fafbfd;border-radius:6px;font-size:11.5px}
+.test-card-info .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.4px;margin-bottom:3px}
+.test-card-info .val{font-weight:600;color:var(--text)}
+.test-card-actions{display:flex;gap:6px;justify-content:flex-end}
+.calendar-wrap{background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+.calendar-header{padding:12px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);background:#fafbfd;flex-wrap:wrap;gap:10px}
+.cal-nav{display:flex;align-items:center;gap:8px}
+.cal-nav button{background:#fff;border:1px solid var(--border);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;color:var(--text);font-weight:700}
+.cal-nav button:hover{background:#eef4ff;border-color:var(--primary);color:var(--primary)}
+.cal-month{font-size:15px;font-weight:700;min-width:170px;text-align:center}
+.cal-color-toggle{display:flex;gap:4px;align-items:center;font-size:11px;color:var(--muted)}
+.cal-color-toggle button{background:transparent;border:1px solid var(--border);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer}
+.cal-color-toggle button.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);background:var(--border)}
+.cal-dow{background:#f8fafc;padding:8px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;text-align:center}
+.cal-day{background:#fff;min-height:96px;padding:5px 5px 4px;position:relative;display:flex;flex-direction:column;gap:2px}
+.cal-day.other-month{background:#fafbfd;opacity:.55}
+.cal-day.today{background:#f0f7ff}
+.cal-day.drag-over{background:#dbeafe;outline:2px dashed var(--primary);outline-offset:-3px}
+.cal-day-num{font-size:11px;font-weight:700;color:var(--muted);position:absolute;top:5px;right:7px}
+.cal-day.today .cal-day-num{background:var(--primary);color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;top:4px;right:4px}
+.cal-event{background:var(--primary);color:#fff;padding:3px 7px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:grab;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;margin-top:18px;border-left:3px solid rgba(0,0,0,.25)}
+.cal-event:not(:first-of-type){margin-top:0}
+.cal-event:hover{filter:brightness(1.08)}
+.cal-event:active{cursor:grabbing}
+.cal-event-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#fff;margin-right:4px;vertical-align:middle;opacity:.8}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--muted);padding:9px 18px;background:#fafbfd;border-bottom:1px solid var(--border)}
+.legend-item{display:flex;align-items:center;gap:5px}
+.legend-dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+.cal-add-btn{position:absolute;bottom:4px;right:4px;width:20px;height:20px;border-radius:50%;background:var(--primary);color:#fff;border:none;cursor:pointer;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,transform .15s;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.2);z-index:2}
+.cal-day:hover .cal-add-btn{opacity:1}
+.cal-add-btn:hover{transform:scale(1.15);background:#1e40af}
+.cal-event.campaign{font-size:10.5px;padding:3px 7px}
+.multi-select-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:5px}
+.multi-select-grid.times{grid-template-columns:repeat(4,1fr)}
+.multi-select-item{display:flex;align-items:center;gap:6px;padding:7px 10px;background:#fff;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;transition:.12s;user-select:none}
+.multi-select-item:hover{border-color:var(--primary)}
+.multi-select-item.active{background:#dbeafe;border-color:var(--primary);color:#1e40af;font-weight:600}
+.multi-select-item input{display:none}
+.chip{display:inline-block;padding:3px 9px;background:#dbeafe;color:#1e40af;border-radius:10px;font-size:11px;font-weight:600;margin-right:4px;margin-bottom:4px}
+.chip.warm{background:#fef3c7;color:#92400e}
+.chip.cold{background:#cffafe;color:#0e7490}
+.chip.hot{background:#fee2e2;color:#991b1b}
+.panel-overlay{position:fixed;inset:0;background:rgba(15,27,45,.35);opacity:0;visibility:hidden;transition:.2s;z-index:50}
+.panel-overlay.open{opacity:1;visibility:visible}
+.side-panel{position:fixed;top:0;right:0;width:460px;height:100vh;background:#fff;box-shadow:var(--shadow-lg);transform:translateX(100%);transition:transform .25s;z-index:51;overflow-y:auto;display:flex;flex-direction:column}
+.side-panel.open{transform:translateX(0)}
+.panel-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#fff;z-index:2}
+.panel-head h2{font-size:16px;font-weight:700}
+.panel-close{background:transparent;border:none;font-size:22px;cursor:pointer;color:var(--muted);width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.panel-close:hover{background:#f4f7fb;color:var(--text)}
+.panel-body{padding:18px 22px;flex:1}
+.panel-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;background:#fafbfd;position:sticky;bottom:0}
+.log-form-row{margin-bottom:13px}
+.log-form-row label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:5px}
+.log-form-row label .required{color:var(--danger)}
+.log-form-row input,.log-form-row select,.log-form-row textarea{width:100%;border:1px solid var(--border);background:#fff;padding:8px 11px;border-radius:6px;font-size:13px;color:var(--text);font-family:inherit}
+.log-form-row input:focus,.log-form-row select:focus,.log-form-row textarea:focus{outline:none;border-color:var(--primary)}
+.log-form-row textarea{resize:vertical;min-height:56px;line-height:1.5}
+.log-form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-section{padding:12px 14px;background:#fef3c7;border-radius:8px;margin-bottom:14px;border-left:3px solid #f59e0b}
+.form-section-title{font-size:11px;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.form-section.finish{background:#d1fae5;border-left-color:#10b981}
+.form-section.finish .form-section-title{color:#047857}
+.detail-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;padding:14px;background:#fafbfd;border-radius:8px}
+.detail-meta-item .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:3px}
+.detail-meta-item .val{font-size:13px;color:var(--text);font-weight:500}
+.detail-section{margin-bottom:16px}
+.detail-section h4{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:6px}
+.detail-section p{font-size:13px;color:var(--text);line-height:1.55;white-space:pre-wrap}
+.impact-card{padding:14px;border-radius:8px;display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.impact-card.positive{background:#d1fae5;color:#047857}
+.impact-card.neutral{background:#f1f4f8;color:#475569}
+.impact-card.negative{background:#fee2e2;color:#991b1b}
+.impact-icon{font-size:22px;font-weight:700;width:42px;height:42px;background:rgba(255,255,255,.6);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.impact-text strong{display:block;font-size:13px;margin-bottom:2px}
+.impact-text span{font-size:11px;opacity:.85}
+.delta-row{display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--border);padding:10px 14px;border-radius:6px;margin-top:8px;font-size:12px}
+.lib-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.lib-grid{grid-template-columns:1fr}}
+.lib-col{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:var(--shadow)}
+.lib-col h3{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.lib-col h3 .pill{font-size:10px;color:var(--muted);background:#f1f4f8;padding:2px 8px;border-radius:10px;font-weight:600}
+.lib-col.success h3{color:var(--success)}
+.lib-col.fail h3{color:var(--danger)}
+.lib-item{padding:12px;background:#fafbfd;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;cursor:pointer;transition:.15s}
+.lib-item:hover{background:#fff;border-color:var(--primary);box-shadow:var(--shadow)}
+.lib-item-title{font-size:13px;font-weight:600;margin-bottom:4px}
+.lib-item-meta{font-size:11px;color:var(--muted);margin-bottom:6px}
+.lib-item-learning{font-size:12px;color:var(--text);line-height:1.45}
+.log-toast{position:fixed;bottom:20px;right:20px;background:#0f1b2d;color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);z-index:100;animation:log-slidein .2s}
+@keyframes log-slidein{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.log-toast.error{background:var(--danger)}
+.log-toast.success{background:var(--success)}
+.log-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+@media(max-width:900px){.log-kpi-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -222,6 +371,7 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
   <button class="tab-btn" data-page="wf">WhatsApp Fluxo</button>
   <button class="tab-btn" data-page="wc">WhatsApp Campanha</button>
   <button class="tab-btn" data-page="co">Comunidade WhatsApp</button>
+  <button class="tab-btn" data-page="log" style="margin-left:auto;color:var(--primary);font-weight:600">📋 Log CRM</button>
 </nav>
 
 <main>
@@ -396,7 +546,138 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
 <section class="page" id="page-wc"></section>
 <section class="page" id="page-co"></section>
 
+<!-- ============ LOG CRM ============ -->
+<section class="page" id="page-log">
+
+  <!-- Cabeçalho interno do Log -->
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 0 14px;border-bottom:1px solid var(--border);margin-bottom:0">
+    <div>
+      <div style="font-size:15px;font-weight:700">Log de Ações <span style="color:var(--primary)">CRM</span></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Backlog · Calendários · Aprendizados</div>
+    </div>
+    <div id="log-header-btns" style="display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="exportLogData()">⬇ Exportar CSV</button>
+      <button class="btn" onclick="openLogPanel('create','action')">+ Nova Ação</button>
+      <button class="btn btn-warn" onclick="openLogPanel('create','test')">+ Novo Teste</button>
+    </div>
+  </div>
+
+  <!-- Tabs internas do Log -->
+  <nav style="background:#fff;border-bottom:1px solid var(--border);margin:0 -28px;padding:0 28px;display:flex;gap:4px">
+    <button class="log-tab-btn active" data-logtab="backlog">Backlog</button>
+    <button class="log-tab-btn" data-logtab="campaigns">Calendário de Campanhas</button>
+    <button class="log-tab-btn" data-logtab="library">Biblioteca</button>
+  </nav>
+
+  <!-- ---- BACKLOG ---- -->
+  <div class="log-page active" id="log-page-backlog" style="padding-top:18px">
+    <div class="sub-tabs">
+      <button class="sub-tab-btn active" data-sub="list">Lista (Ações + Testes)</button>
+      <button class="sub-tab-btn" data-sub="running">Em andamento</button>
+      <button class="sub-tab-btn" data-sub="done">Concluídos</button>
+      <button class="sub-tab-btn" data-sub="cal">Calendário de Testes</button>
+    </div>
+
+    <div class="sub-page active" id="log-sub-list">
+      <div class="log-kpi-grid">
+        <div class="card"><div class="card-title">Total no backlog</div><div class="kpi-value" id="log-kpi-total">—</div><div style="font-size:11px;color:var(--muted)">Ações + testes</div></div>
+        <div class="card"><div class="card-title">Em execução</div><div class="kpi-value" id="log-kpi-running">—</div><div style="font-size:11px;color:var(--muted)">Ativos agora</div></div>
+        <div class="card"><div class="card-title">Planejados</div><div class="kpi-value" id="log-kpi-planned">—</div><div style="font-size:11px;color:var(--muted)">Ainda não iniciados</div></div>
+        <div class="card"><div class="card-title">Testes ativos</div><div class="kpi-value" id="log-kpi-tests">—</div><div style="font-size:11px;color:var(--muted)">Aguardando finalizar</div></div>
+      </div>
+      <div class="log-toolbar">
+        <div class="log-search-row">
+          <select id="f-log-channel"><option value="all">Todos os canais</option></select>
+          <select id="f-log-type"><option value="all">Todos os tipos</option></select>
+          <select id="f-log-resp"><option value="all">Todos os responsáveis</option></select>
+          <select id="f-log-kind"><option value="all">Ações + Testes</option><option value="action">Só Ações</option><option value="test">Só Testes</option></select>
+          <input type="search" id="f-log-search" placeholder="Buscar título, ativo, motivo...">
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="resetLogFilters('list')">Limpar</button>
+      </div>
+      <div class="table-wrap">
+        <table id="log-table-list">
+          <thead><tr><th>Título</th><th>Tipo</th><th>Canal</th><th>Fluxo/Campanha</th><th>Resp.</th><th>Data</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="log-empty-list" class="empty-state" style="display:none;margin-top:14px"><h3>Nenhum registro encontrado</h3><p>Ajuste os filtros ou crie um novo registro.</p></div>
+    </div>
+
+    <div class="sub-page" id="log-sub-running">
+      <div class="log-toolbar">
+        <div class="log-search-row">
+          <select id="f-log-run-channel"><option value="all">Todos os canais</option></select>
+          <select id="f-log-run-kind"><option value="all">Ações + Testes</option><option value="action">Só Ações</option><option value="test">Só Testes</option></select>
+          <input type="search" id="f-log-run-search" placeholder="Buscar...">
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="resetLogFilters('run')">Limpar</button>
+      </div>
+      <div class="grid grid-3" id="log-running-grid"></div>
+      <div id="log-empty-running" class="empty-state" style="display:none"><h3>Nenhum registro em andamento</h3><p>Crie uma nova ação ou teste para começar.</p></div>
+    </div>
+
+    <div class="sub-page" id="log-sub-done">
+      <div class="log-toolbar">
+        <div class="log-search-row">
+          <select id="f-log-done-channel"><option value="all">Todos os canais</option></select>
+          <select id="f-log-done-kind"><option value="all">Ações + Testes</option><option value="action">Só Ações</option><option value="test">Só Testes</option></select>
+          <select id="f-log-done-result"><option value="all">Todos os resultados</option><option value="positive">Positivo</option><option value="neutral">Neutro</option><option value="negative">Negativo</option></select>
+          <input type="search" id="f-log-done-search" placeholder="Buscar...">
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="resetLogFilters('done')">Limpar</button>
+      </div>
+      <div class="table-wrap">
+        <table id="log-table-done">
+          <thead><tr><th>Título</th><th>Tipo</th><th>Canal</th><th>Resp.</th><th>Data</th><th>Resultado</th><th>Aprendizado</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="log-empty-done" class="empty-state" style="display:none;margin-top:14px"><h3>Nenhum registro concluído</h3><p>Finalize testes ou marque ações como concluídas para vê-los aqui.</p></div>
+    </div>
+
+    <div class="sub-page" id="log-sub-cal"><div id="cal-test-container"></div></div>
+  </div>
+
+  <!-- ---- CALENDÁRIO DE CAMPANHAS ---- -->
+  <div class="log-page" id="log-page-campaigns" style="padding-top:18px">
+    <div class="sub-tabs">
+      <button class="sub-tab-btn active" data-sub="ec">E-mail Campanha</button>
+      <button class="sub-tab-btn" data-sub="wc">WhatsApp Campanha</button>
+    </div>
+    <div class="sub-page active" id="log-sub-ec"><div id="cal-ec-container"></div></div>
+    <div class="sub-page" id="log-sub-wc"><div id="cal-wc-container"></div></div>
+  </div>
+
+  <!-- ---- BIBLIOTECA ---- -->
+  <div class="log-page" id="log-page-library" style="padding-top:18px">
+    <p style="color:var(--muted);margin-bottom:14px;font-size:13px">Testes finalizados com aprendizado registrado — o que funcionou (replicar) e o que não repetir.</p>
+    <div class="lib-grid">
+      <div class="lib-col success">
+        <h3>✅ Funcionou — Replicar <span class="pill" id="lib-pos-count">0</span></h3>
+        <div id="lib-pos"></div>
+      </div>
+      <div class="lib-col fail">
+        <h3>❌ Não Repetir — Evitar <span class="pill" id="lib-neg-count">0</span></h3>
+        <div id="lib-neg"></div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
 </main>
+
+<!-- Side panel do Log -->
+<div class="panel-overlay" id="log-overlay" onclick="closeLogPanel()"></div>
+<aside class="side-panel" id="log-panel">
+  <div class="panel-head">
+    <h2 id="log-panel-title">—</h2>
+    <button class="panel-close" onclick="closeLogPanel()">×</button>
+  </div>
+  <div class="panel-body" id="log-panel-body"></div>
+  <div class="panel-foot" id="log-panel-foot"></div>
+</aside>
 
 <script>
 // =========================================
@@ -2127,6 +2408,13 @@ document.querySelectorAll('.tab-btn').forEach(b=>{
     b.classList.add('active');
     const p = b.dataset.page;
     document.getElementById('page-'+p).classList.add('active');
+    // Oculta barra de filtros globais no Log CRM (não se aplica)
+    document.querySelector('.filters').style.display = p === 'log' ? 'none' : '';
+    if(p === 'log'){
+      if(!_logLoaded) renderLogPage();
+      window.scrollTo({top:0,behavior:'smooth'});
+      return;
+    }
     if(p!=='resumo' && !renderedChannels.has(p)){
       renderChannel(p);
       renderedChannels.add(p);
@@ -2212,6 +2500,839 @@ document.getElementById('f-customer').addEventListener('change', async () => {
   if(activePage === 'resumo') { _drawResumo(); }
   else if(activePage && CHANNELS[activePage]) { await renderChannel(activePage); renderedChannels.add(activePage); }
 });
+// =========================================
+// LOG CRM — CONSTANTES
+// =========================================
+const LOG_TYPES = {
+  launch:  {name:'Lançamento de fluxo/campanha', color:'#2563eb'},
+  copy:    {name:'Mudança de copy/criativo',      color:'#8b5cf6'},
+  ab:      {name:'Teste A/B',                     color:'#ec4899'},
+  segment: {name:'Mudança de segmentação/público',color:'#10b981'},
+  cadence: {name:'Mudança de cadência/horário',   color:'#f59e0b'},
+  trigger: {name:'Mudança de gatilho de fluxo',   color:'#06b6d4'},
+  popup:   {name:'Novo popup/formulário',          color:'#a855f7'},
+  pause:   {name:'Pausa/desativação',              color:'#94a3b8'},
+  ops:     {name:'Mudança operacional',            color:'#64748b'},
+  offer:   {name:'Teste de oferta',               color:'#ef4444'},
+  base:    {name:'Segmentação da base',            color:'#14b8a6'}
+};
+const LOG_STATUS = {
+  planned:{name:'Planejado'}, running:{name:'Em execução'},
+  done:{name:'Concluído'},    paused:{name:'Pausado'}, cancelled:{name:'Cancelado'}
+};
+const LOG_RESULTS = {
+  positive:{name:'Positivo',color:'#10b981'},
+  neutral: {name:'Neutro',  color:'#94a3b8'},
+  negative:{name:'Negativo',color:'#ef4444'}
+};
+const LOG_METRICS = ['Receita','Receita / Inscrito','Receita / Disparo','Taxa de Abertura','CTOR','Taxa de Resposta','Conversão Geral','RPS','Ticket Médio','Taxa de Cadastro','Outra'];
+const EMAIL_MODELS = {
+  visual:       {name:'Visual',        color:'#8b5cf6'},
+  transacional: {name:'Transacional',  color:'#2563eb'},
+  desformatado: {name:'Desformatado',  color:'#64748b'},
+  storytelling: {name:'Storytelling',  color:'#ec4899'}
+};
+const EMAIL_BASES = ['Engajados 90d','VIP / Campeões','Base Geral','Compradores Recentes (30d)','Reativação 60d','Leads (não compraram)','Carrinho Abandonado','Cluster Premium'];
+const WPP_BASES = [
+  {name:'Clientes Quentes',kind:'hot', color:'#ef4444'},
+  {name:'Clientes Mornos', kind:'warm',color:'#f59e0b'},
+  {name:'Clientes Frios',  kind:'cold',color:'#06b6d4'},
+  {name:'Leads Quentes',   kind:'hot', color:'#ec4899'},
+  {name:'Leads Mornos',    kind:'warm',color:'#fbbf24'},
+  {name:'Leads Frios',     kind:'cold',color:'#94a3b8'}
+];
+const WPP_TIMES = ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'];
+function wppBaseColor(name){ return WPP_BASES.find(b=>b.name===name)?.color||'#94a3b8'; }
+function wppBaseKind(name){  return WPP_BASES.find(b=>b.name===name)?.kind||'cold'; }
+
+// =========================================
+// LOG CRM — ESTADO E DADOS
+// =========================================
+let logData = [];   // todos os itens (ações+testes+campanhas)
+let _logLoaded = false;
+function logUid(){ return 'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function logFmtDate(iso){ if(!iso) return '—'; return new Date(iso+'T00:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}); }
+function logFmtDateFull(iso){ if(!iso) return '—'; return new Date(iso+'T00:00:00').toLocaleDateString('pt-BR'); }
+function logTodayISO(){ return new Date().toISOString().slice(0,10); }
+
+// Conversão banco (snake_case) ↔ JS (camelCase)
+function _dbToItem(r){
+  return { id:r.id, kind:r.kind, title:r.title, type:r.type, channel:r.channel,
+    asset:r.asset, responsible:r.responsible, status:r.status,
+    startDate:r.start_date, endDate:r.end_date, motivation:r.motivation,
+    hypothesis:r.hypothesis, targetMetric:r.target_metric,
+    expectedImprovement:r.expected_improvement, valueBefore:r.value_before,
+    valueAfter:r.value_after, result:r.result, learning:r.learning,
+    attachment:r.attachment, createdAt:r.created_at };
+}
+function _itemToDb(it){
+  return { id:it.id, kind:it.kind, title:it.title, type:it.type,
+    channel:it.channel||null, asset:it.asset||null, responsible:it.responsible,
+    status:it.status, start_date:it.startDate, end_date:it.endDate||null,
+    motivation:it.motivation, hypothesis:it.hypothesis||null,
+    target_metric:it.targetMetric||null, expected_improvement:it.expectedImprovement??null,
+    value_before:it.valueBefore??null, value_after:it.valueAfter??null,
+    result:it.result||null, learning:it.learning||null, attachment:it.attachment||null };
+}
+function _dbToCampaign(r){
+  return { id:r.id, kind:r.kind, name:r.name, date:r.date, bases:r.bases||[],
+    schedule:r.schedule||[], emailModel:r.email_model, quantity:r.quantity,
+    createdAt:r.created_at };
+}
+function _campaignToDb(it){
+  return { id:it.id, kind:it.kind, name:it.name, date:it.date, bases:it.bases||[],
+    schedule:Array.isArray(it.schedule)?it.schedule:[it.schedule].filter(Boolean),
+    email_model:it.emailModel||null, quantity:it.quantity||null };
+}
+
+// =========================================
+// LOG CRM — SUPABASE CRUD
+// =========================================
+async function renderLogPage(){
+  _logLoaded = true;
+  const [r1, r2] = await Promise.all([
+    _sb.from('crm_log_items').select('*').order('created_at',{ascending:false}),
+    _sb.from('crm_campaigns').select('*').order('created_at',{ascending:false}),
+  ]);
+  logData = [...(r1.data||[]).map(_dbToItem), ...(r2.data||[]).map(_dbToCampaign)];
+  logPopulateFilters();
+  logRenderAll();
+  _initLogTabs();
+}
+async function _saveLogItem(item){
+  const {error} = await _sb.from('crm_log_items').upsert(_itemToDb(item));
+  if(error){ logToast('Erro ao salvar','error'); console.error(error); }
+}
+async function _saveCampaignDb(item){
+  const {error} = await _sb.from('crm_campaigns').upsert(_campaignToDb(item));
+  if(error){ logToast('Erro ao salvar','error'); console.error(error); }
+}
+async function _deleteLogDb(id, isCampaign){
+  const tbl = isCampaign ? 'crm_campaigns' : 'crm_log_items';
+  const {error} = await _sb.from(tbl).delete().eq('id',id);
+  if(error){ logToast('Erro ao excluir','error'); console.error(error); }
+}
+
+// =========================================
+// LOG CRM — FILTROS E KPIs
+// =========================================
+function logPopulateFilters(){
+  const chanOpts = '<option value="all">Todos os canais</option>'+
+    Object.entries(CHANNELS).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join('');
+  ['f-log-channel','f-log-run-channel','f-log-done-channel'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.innerHTML=chanOpts;
+  });
+  const typeEl=document.getElementById('f-log-type');
+  if(typeEl) typeEl.innerHTML='<option value="all">Todos os tipos</option>'+
+    Object.entries(LOG_TYPES).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join('');
+  const respEl=document.getElementById('f-log-resp');
+  if(respEl){
+    const resps=[...new Set(logData.map(d=>d.responsible).filter(Boolean))];
+    respEl.innerHTML='<option value="all">Todos os responsáveis</option>'+
+      resps.map(r=>`<option value="${r}">${r}</option>`).join('');
+  }
+}
+function _logFilter(item){
+  if(item.kind&&item.kind.startsWith('campaign-')) return false;
+  return true;
+}
+function renderLogKPIs(){
+  const bl=logData.filter(_logFilter);
+  const _set=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  _set('log-kpi-total',bl.length);
+  _set('log-kpi-running',bl.filter(d=>d.status==='running').length);
+  _set('log-kpi-planned',bl.filter(d=>d.status==='planned').length);
+  _set('log-kpi-tests',bl.filter(d=>d.kind==='test'&&d.status==='running').length);
+}
+
+// =========================================
+// LOG CRM — LISTA
+// =========================================
+function _applyLogListFilters(item){
+  if(item.kind&&item.kind.startsWith('campaign-')) return false;
+  const f={
+    channel:document.getElementById('f-log-channel')?.value||'all',
+    type:   document.getElementById('f-log-type')?.value||'all',
+    resp:   document.getElementById('f-log-resp')?.value||'all',
+    kind:   document.getElementById('f-log-kind')?.value||'all',
+    search: (document.getElementById('f-log-search')?.value||'').toLowerCase().trim()
+  };
+  if(f.channel!=='all'&&item.channel!==f.channel) return false;
+  if(f.type!=='all'&&item.type!==f.type) return false;
+  if(f.resp!=='all'&&item.responsible!==f.resp) return false;
+  if(f.kind!=='all'&&item.kind!==f.kind) return false;
+  if(f.search){
+    const hay=(item.title+' '+(item.asset||'')+' '+(item.motivation||'')+' '+(item.hypothesis||'')).toLowerCase();
+    if(!hay.includes(f.search)) return false;
+  }
+  return true;
+}
+function renderLogList(){
+  const list=logData.filter(_applyLogListFilters).sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||''));
+  const tbody=document.querySelector('#log-table-list tbody');
+  const empty=document.getElementById('log-empty-list');
+  const wrap=document.getElementById('log-table-list')?.parentElement;
+  if(!tbody) return;
+  if(!list.length){ tbody.innerHTML=''; if(empty) empty.style.display='block'; if(wrap) wrap.style.display='none'; return; }
+  if(empty) empty.style.display='none';
+  if(wrap) wrap.style.display='block';
+  tbody.innerHTML=list.map(item=>`
+    <tr onclick="openLogPanel('detail','${item.kind}','${item.id}')">
+      <td class="title-cell"><span class="kind-badge ${item.kind==='test'?'kb-test':'kb-action'}">${item.kind==='test'?'Teste':'Ação'}</span>${item.title}</td>
+      <td><span class="tag-type-dot" style="background:${LOG_TYPES[item.type]?.color||'#94a3b8'}"></span>${LOG_TYPES[item.type]?.name||item.type}</td>
+      <td>${CHANNELS[item.channel]?.name||'—'}</td>
+      <td>${item.asset||'—'}</td>
+      <td>${item.responsible||'—'}</td>
+      <td>${logFmtDate(item.startDate)}${item.endDate?' → '+logFmtDate(item.endDate):''}</td>
+      <td><span class="tag tag-status-${item.status}">${LOG_STATUS[item.status]?.name||item.status}</span></td>
+    </tr>`).join('');
+}
+
+// =========================================
+// LOG CRM — EM ANDAMENTO
+// =========================================
+function _applyLogRunFilters(item){
+  if(item.kind&&item.kind.startsWith('campaign-')) return false;
+  if(item.status!=='running') return false;
+  const f={
+    channel:document.getElementById('f-log-run-channel')?.value||'all',
+    kind:   document.getElementById('f-log-run-kind')?.value||'all',
+    search: (document.getElementById('f-log-run-search')?.value||'').toLowerCase().trim()
+  };
+  if(f.channel!=='all'&&item.channel!==f.channel) return false;
+  if(f.kind!=='all'&&item.kind!==f.kind) return false;
+  if(f.search){
+    const hay=(item.title+' '+(item.asset||'')+' '+(item.motivation||'')).toLowerCase();
+    if(!hay.includes(f.search)) return false;
+  }
+  return true;
+}
+function renderLogRunning(){
+  const list=logData.filter(_applyLogRunFilters).sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||''));
+  const grid=document.getElementById('log-running-grid');
+  const empty=document.getElementById('log-empty-running');
+  if(!grid) return;
+  if(!list.length){ grid.innerHTML=''; if(empty) empty.style.display='block'; return; }
+  if(empty) empty.style.display='none';
+  grid.innerHTML=list.map(item=>{
+    const isTest=item.kind==='test';
+    return `<div class="test-card">
+      <div class="test-card-head"><h4><span class="kind-badge ${isTest?'kb-test':'kb-action'}">${isTest?'Teste':'Ação'}</span>${item.title}</h4></div>
+      <div class="test-card-meta">${CHANNELS[item.channel]?.name||'—'} · ${item.asset||'—'} · ${item.responsible||'—'}</div>
+      ${isTest?`<div class="test-card-info">
+        <div><div class="lbl">Métrica-alvo</div><div class="val">${item.targetMetric||'—'}</div></div>
+        <div><div class="lbl">Meta</div><div class="val">+${item.expectedImprovement||'—'}</div></div>
+        <div><div class="lbl">Início</div><div class="val">${logFmtDate(item.startDate)}</div></div>
+        <div><div class="lbl">Fim previsto</div><div class="val">${logFmtDate(item.endDate)}</div></div>
+      </div>`:`<div class="test-card-info">
+        <div><div class="lbl">Tipo</div><div class="val">${LOG_TYPES[item.type]?.name||'—'}</div></div>
+        <div><div class="lbl">Data</div><div class="val">${logFmtDate(item.startDate)}</div></div>
+      </div>`}
+      <div class="test-card-actions">
+        <button class="btn btn-ghost btn-sm" onclick="openLogPanel('detail','${item.kind}','${item.id}')">Ver detalhes</button>
+        ${isTest?`<button class="btn btn-success btn-sm" onclick="openLogFinishPanel('${item.id}')">Finalizar teste</button>`
+                :`<button class="btn btn-sm" onclick="markLogActionDone('${item.id}')">Marcar concluído</button>`}
+      </div></div>`;
+  }).join('');
+}
+async function markLogActionDone(id){
+  const item=logData.find(d=>d.id===id); if(!item) return;
+  item.status='done';
+  await _saveLogItem(item);
+  logRenderAll(); logToast('Ação marcada como concluída','success');
+}
+
+// =========================================
+// LOG CRM — CONCLUÍDOS
+// =========================================
+function _applyLogDoneFilters(item){
+  if(item.kind&&item.kind.startsWith('campaign-')) return false;
+  if(item.status!=='done'&&item.status!=='cancelled') return false;
+  const f={
+    channel:document.getElementById('f-log-done-channel')?.value||'all',
+    kind:   document.getElementById('f-log-done-kind')?.value||'all',
+    result: document.getElementById('f-log-done-result')?.value||'all',
+    search: (document.getElementById('f-log-done-search')?.value||'').toLowerCase().trim()
+  };
+  if(f.channel!=='all'&&item.channel!==f.channel) return false;
+  if(f.kind!=='all'&&item.kind!==f.kind) return false;
+  if(f.result!=='all'&&item.result!==f.result) return false;
+  if(f.search){
+    const hay=(item.title+' '+(item.asset||'')+' '+(item.learning||'')).toLowerCase();
+    if(!hay.includes(f.search)) return false;
+  }
+  return true;
+}
+function renderLogDone(){
+  const list=logData.filter(_applyLogDoneFilters).sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||''));
+  const tbody=document.querySelector('#log-table-done tbody');
+  const empty=document.getElementById('log-empty-done');
+  const wrap=document.getElementById('log-table-done')?.parentElement;
+  if(!tbody) return;
+  if(!list.length){ tbody.innerHTML=''; if(empty) empty.style.display='block'; if(wrap) wrap.style.display='none'; return; }
+  if(empty) empty.style.display='none';
+  if(wrap) wrap.style.display='block';
+  tbody.innerHTML=list.map(item=>`
+    <tr onclick="openLogPanel('detail','${item.kind}','${item.id}')">
+      <td class="title-cell"><span class="kind-badge ${item.kind==='test'?'kb-test':'kb-action'}">${item.kind==='test'?'Teste':'Ação'}</span>${item.title}</td>
+      <td><span class="tag-type-dot" style="background:${LOG_TYPES[item.type]?.color||'#94a3b8'}"></span>${LOG_TYPES[item.type]?.name||'—'}</td>
+      <td>${CHANNELS[item.channel]?.name||'—'}</td>
+      <td>${item.responsible||'—'}</td>
+      <td>${logFmtDate(item.startDate)}</td>
+      <td>${item.result?`<span class="tag tag-result-${item.result}">${LOG_RESULTS[item.result].name}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted)">${item.learning||'—'}</td>
+    </tr>`).join('');
+}
+
+// =========================================
+// LOG CRM — BIBLIOTECA
+// =========================================
+function renderLogLibrary(){
+  const list=logData.filter(d=>d.kind==='test'&&d.status==='done'&&d.result&&d.learning);
+  const pos=list.filter(d=>d.result==='positive');
+  const neg=list.filter(d=>d.result==='negative');
+  const pc=document.getElementById('lib-pos-count'); if(pc) pc.textContent=pos.length;
+  const nc=document.getElementById('lib-neg-count'); if(nc) nc.textContent=neg.length;
+  const card=(it)=>`<div class="lib-item" onclick="openLogPanel('detail','${it.kind}','${it.id}')">
+    <div class="lib-item-title">${it.title}</div>
+    <div class="lib-item-meta">${CHANNELS[it.channel]?.name||'—'} · ${LOG_TYPES[it.type]?.name||'—'} · ${logFmtDateFull(it.startDate)}</div>
+    <div class="lib-item-learning">${it.learning}</div></div>`;
+  const pp=document.getElementById('lib-pos');
+  const np=document.getElementById('lib-neg');
+  if(pp) pp.innerHTML=pos.length?pos.map(card).join(''):`<div style="color:var(--muted);padding:16px;font-size:13px">Sem testes positivos ainda.</div>`;
+  if(np) np.innerHTML=neg.length?neg.map(card).join(''):`<div style="color:var(--muted);padding:16px;font-size:13px">Sem testes negativos ainda.</div>`;
+}
+
+// =========================================
+// LOG CRM — CALENDÁRIOS
+// =========================================
+const calState = {
+  'cal-test':{date:new Date(),color:'type',filter:{kindOnly:'test'},mount:'cal-test-container',isCampaign:false},
+  'cal-ec':  {date:new Date(),color:'model',filter:{kindOnly:'campaign-ec'},mount:'cal-ec-container',isCampaign:true,campaignKind:'campaign-ec'},
+  'cal-wc':  {date:new Date(),color:'base', filter:{kindOnly:'campaign-wc'},mount:'cal-wc-container',isCampaign:true,campaignKind:'campaign-wc'}
+};
+function moveMonth(k,delta){ calState[k].date=new Date(calState[k].date.getFullYear(),calState[k].date.getMonth()+delta,1); drawCalendar(k); }
+function goToday(k){ calState[k].date=new Date(); drawCalendar(k); }
+function setColor(k,mode){ calState[k].color=mode; renderCalendar(k); }
+function _calEventColor(item,mode){
+  if(mode==='status'){const m={planned:'#94a3b8',running:'#2563eb',done:'#10b981',paused:'#f59e0b',cancelled:'#ef4444'};return m[item.status]||'#94a3b8';}
+  if(mode==='result'){if(!item.result) return '#94a3b8';return LOG_RESULTS[item.result].color;}
+  return LOG_TYPES[item.type]?.color||'#94a3b8';
+}
+function renderCalendar(key){
+  const st=calState[key];
+  const mount=document.getElementById(st.mount); if(!mount) return;
+  mount.innerHTML=`<div class="calendar-wrap">
+    <div class="calendar-header">
+      <div class="cal-nav">
+        <button onclick="moveMonth('${key}',-1)">‹</button>
+        <div class="cal-month" id="month-${key}">—</div>
+        <button onclick="moveMonth('${key}',1)">›</button>
+        <button class="btn btn-ghost btn-sm" onclick="goToday('${key}')" style="margin-left:8px">Hoje</button>
+      </div>
+      ${st.isCampaign?`<div style="font-size:11px;color:var(--muted)">Cor por: ${st.campaignKind==='campaign-ec'?'Modelo do e-mail':'Tipo de base'}</div>`:`<div class="cal-color-toggle"><span>Cor por:</span>
+        <button class="${st.color==='type'?'active':''}" onclick="setColor('${key}','type')">Tipo</button>
+        <button class="${st.color==='status'?'active':''}" onclick="setColor('${key}','status')">Status</button>
+        <button class="${st.color==='result'?'active':''}" onclick="setColor('${key}','result')">Resultado</button>
+      </div>`}
+    </div>
+    <div class="legend" id="legend-${key}"></div>
+    <div class="cal-grid" id="grid-${key}"></div></div>`;
+  drawCalendar(key);
+}
+function drawCalendar(key){
+  const st=calState[key];
+  const Y=st.date.getFullYear(),M=st.date.getMonth();
+  const mEl=document.getElementById('month-'+key);
+  if(mEl) mEl.textContent=st.date.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).replace(/^./,c=>c.toUpperCase());
+  const startDow=new Date(Y,M,1).getDay(), dim=new Date(Y,M+1,0).getDate(), prev=new Date(Y,M,0).getDate();
+  const cells=[];
+  for(let i=0;i<startDow;i++) cells.push({day:prev-startDow+i+1,date:new Date(Y,M-1,prev-startDow+i+1).toISOString().slice(0,10),otherMonth:true});
+  for(let d=1;d<=dim;d++) cells.push({day:d,date:new Date(Y,M,d).toISOString().slice(0,10),otherMonth:false});
+  while(cells.length%7!==0){const last=cells[cells.length-1];const ld=new Date(last.date+'T00:00:00');ld.setDate(ld.getDate()+1);cells.push({day:ld.getDate(),date:ld.toISOString().slice(0,10),otherMonth:true});}
+  const grid=document.getElementById('grid-'+key); if(!grid) return;
+  grid.innerHTML=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  const events=logData.filter(d=>st.filter.kindOnly?d.kind===st.filter.kindOnly:true);
+  const today=logTodayISO();
+  cells.forEach(c=>{
+    const dayEv=events.filter(e=>{
+      if(st.isCampaign) return e.date===c.date;
+      const s=e.startDate,f=e.endDate||e.startDate;return c.date>=s&&c.date<=f;
+    });
+    const div=document.createElement('div');
+    div.className='cal-day'+(c.otherMonth?' other-month':'')+(c.date===today?' today':'');
+    if(!st.isCampaign){
+      div.addEventListener('dragover',e=>{e.preventDefault();div.classList.add('drag-over');});
+      div.addEventListener('dragleave',()=>div.classList.remove('drag-over'));
+      div.addEventListener('drop',e=>{e.preventDefault();div.classList.remove('drag-over');const id=e.dataTransfer.getData('text/id');logMoveEvent(id,c.date);});
+    }
+    div.innerHTML=`<span class="cal-day-num">${c.day}</span>`;
+    if(st.isCampaign&&!c.otherMonth){
+      const ab=document.createElement('button'); ab.className='cal-add-btn'; ab.textContent='+'; ab.title='Nova campanha neste dia';
+      ab.onclick=(e)=>{e.stopPropagation();openLogCampaignPanel('create',st.campaignKind,null,c.date);}; div.appendChild(ab);
+    }
+    dayEv.forEach(ev=>{
+      let color,label,cls='cal-event';
+      if(ev.kind==='campaign-ec'){color=EMAIL_MODELS[ev.emailModel]?.color||'#2563eb';label=`📧 ${ev.schedule||''} · ${ev.name}`;cls+=' campaign';}
+      else if(ev.kind==='campaign-wc'){color=wppBaseColor(ev.bases?.[0]);const t=Array.isArray(ev.schedule)?ev.schedule.length+'x':'';label=`💬 ${t?t+' · ':''}${ev.name}`;cls+=' campaign';}
+      else{color=_calEventColor(ev,st.color);label=`${ev.kind==='test'?'🧪 ':''}${ev.title}`;}
+      const ed=document.createElement('div'); ed.className=cls; ed.style.background=color;
+      ed.draggable=!st.isCampaign; ed.title=ev.name||ev.title;
+      ed.innerHTML=`<span class="cal-event-dot"></span>${label}`;
+      ed.onclick=(e)=>{e.stopPropagation();if(ev.kind&&ev.kind.startsWith('campaign-')) openLogCampaignPanel('detail',ev.kind,ev.id);else openLogPanel('detail',ev.kind,ev.id);};
+      if(!st.isCampaign) ed.ondragstart=(e)=>{e.dataTransfer.setData('text/id',ev.id);};
+      div.appendChild(ed);
+    });
+    grid.appendChild(div);
+  });
+  let legItems;
+  if(st.isCampaign&&st.campaignKind==='campaign-ec') legItems=Object.entries(EMAIL_MODELS).map(([,v])=>({name:v.name,color:v.color}));
+  else if(st.isCampaign) legItems=WPP_BASES.map(b=>({name:b.name,color:b.color}));
+  else if(st.color==='type') legItems=Object.entries(LOG_TYPES).map(([,v])=>({name:v.name,color:v.color}));
+  else if(st.color==='status') legItems=[['planned','#94a3b8'],['running','#2563eb'],['done','#10b981'],['paused','#f59e0b'],['cancelled','#ef4444']].map(([k,c])=>({name:LOG_STATUS[k].name,color:c}));
+  else legItems=[...Object.entries(LOG_RESULTS).map(([,v])=>({name:v.name,color:v.color})),{name:'Sem resultado',color:'#94a3b8'}];
+  const legEl=document.getElementById('legend-'+key); if(legEl) legEl.innerHTML=legItems.map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.name}</span>`).join('');
+}
+async function logMoveEvent(id,newDate){
+  const item=logData.find(d=>d.id===id); if(!item) return;
+  const diff=(new Date(newDate+'T00:00:00')-new Date(item.startDate+'T00:00:00'))/86400000;
+  item.startDate=newDate;
+  if(item.endDate){const e=new Date(item.endDate+'T00:00:00');e.setDate(e.getDate()+diff);item.endDate=e.toISOString().slice(0,10);}
+  await _saveLogItem(item); logRenderAll(); logToast('Evento movido');
+}
+
+// =========================================
+// LOG CRM — PAINEL LATERAL
+// =========================================
+let _logPanelState={mode:null,kind:null,id:null};
+function openLogPanel(mode,kind,id){
+  _logPanelState={mode,kind,id};
+  document.getElementById('log-panel').classList.add('open');
+  document.getElementById('log-overlay').classList.add('open');
+  if(mode==='create'||mode==='edit') _renderLogForm();
+  else _renderLogDetail();
+}
+function openLogFinishPanel(id){
+  _logPanelState={mode:'finish',kind:'test',id};
+  document.getElementById('log-panel').classList.add('open');
+  document.getElementById('log-overlay').classList.add('open');
+  _renderLogFinishForm();
+}
+function closeLogPanel(){
+  document.getElementById('log-panel').classList.remove('open');
+  document.getElementById('log-overlay').classList.remove('open');
+  _logPanelState={mode:null,kind:null,id:null};
+}
+function _renderLogForm(){
+  const isTest=_logPanelState.kind==='test';
+  const it=(_logPanelState.id?logData.find(d=>d.id===_logPanelState.id):null)||{};
+  document.getElementById('log-panel-title').innerHTML=`<span class="kind-badge ${isTest?'kb-test':'kb-action'}">${isTest?'Teste':'Ação'}</span> ${_logPanelState.mode==='edit'?'Editar':'Novo'}`;
+  document.getElementById('log-panel-body').innerHTML=`
+    <div class="log-form-row"><label>Título <span class="required">*</span></label>
+      <input type="text" id="lf-title" value="${it.title||''}" placeholder="${isTest?'Ex.: A/B Subject com emoji · Boas-vindas':'Ex.: Lançamento Drop SS25'}"></div>
+    <div class="log-form-row-2">
+      <div class="log-form-row"><label>Tipo <span class="required">*</span></label>
+        <select id="lf-type">${Object.entries(LOG_TYPES).map(([k,v])=>`<option value="${k}" ${it.type===k?'selected':''}>${v.name}</option>`).join('')}</select></div>
+      <div class="log-form-row"><label>Canal <span class="required">*</span></label>
+        <select id="lf-channel">${Object.entries(CHANNELS).map(([k,v])=>`<option value="${k}" ${it.channel===k?'selected':''}>${v.name}</option>`).join('')}</select></div>
+    </div>
+    <div class="log-form-row"><label>Fluxo ou Campanha</label>
+      <input type="text" id="lf-asset" value="${it.asset||''}" placeholder="Ex.: Boas-vindas, Drop SS25"></div>
+    <div class="log-form-row-2">
+      <div class="log-form-row"><label>Responsável <span class="required">*</span></label>
+        <input type="text" id="lf-resp" value="${it.responsible||''}" placeholder="Nome"></div>
+      <div class="log-form-row"><label>Data de execução <span class="required">*</span></label>
+        <input type="date" id="lf-start" value="${it.startDate||logTodayISO()}"></div>
+    </div>
+    ${isTest?`<div class="log-form-row"><label>Data prevista de fim <span class="required">*</span></label>
+      <input type="date" id="lf-end" value="${it.endDate||''}"></div>`:''}
+    <div class="log-form-row"><label>Motivo <span class="required">*</span></label>
+      <textarea id="lf-motivation" placeholder="Por que esta ${isTest?'teste':'ação'} está sendo feita?">${it.motivation||''}</textarea></div>
+    ${isTest?`<div class="form-section"><div class="form-section-title">🧪 Hipótese e Métrica do Teste</div>
+      <div class="log-form-row"><label>Hipótese <span class="required">*</span></label>
+        <textarea id="lf-hypothesis" placeholder="Ex.: Subject com emoji vai aumentar Taxa de Abertura">${it.hypothesis||''}</textarea></div>
+      <div class="log-form-row-2">
+        <div class="log-form-row"><label>Métrica-alvo <span class="required">*</span></label>
+          <select id="lf-metric"><option value="">Selecione…</option>
+            ${LOG_METRICS.map(m=>`<option value="${m}" ${it.targetMetric===m?'selected':''}>${m}</option>`).join('')}
+          </select></div>
+        <div class="log-form-row"><label>Quanto pretende aumentar <span class="required">*</span></label>
+          <input type="number" step="0.1" id="lf-expected" value="${it.expectedImprovement??''}" placeholder="Ex.: 3"></div>
+      </div></div>`:''}
+    <div class="log-form-row"><label>Status</label>
+      <select id="lf-status">${Object.entries(LOG_STATUS).map(([k,v])=>`<option value="${k}" ${it.status===k?'selected':(!it.status&&k==='planned'?'selected':'')}>${v.name}</option>`).join('')}</select></div>
+    <div class="log-form-row"><label>Anexo (link)</label>
+      <input type="url" id="lf-attachment" value="${it.attachment||''}" placeholder="https://klaviyo.com/..."></div>`;
+  document.getElementById('log-panel-foot').innerHTML=`
+    ${_logPanelState.mode==='edit'?`<button class="btn btn-danger btn-sm" onclick="deleteLogItem('${_logPanelState.id}')">Excluir</button>`:''}
+    <div style="flex:1"></div>
+    <button class="btn btn-ghost btn-sm" onclick="closeLogPanel()">Cancelar</button>
+    <button class="btn" onclick="saveLogForm()">Salvar</button>`;
+}
+async function saveLogForm(){
+  const isTest=_logPanelState.kind==='test';
+  const v=id=>document.getElementById(id)?.value||'';
+  const title=v('lf-title').trim(),type=v('lf-type'),channel=v('lf-channel'),asset=v('lf-asset').trim(),
+        responsible=v('lf-resp').trim(),startDate=v('lf-start'),status=v('lf-status'),
+        motivation=v('lf-motivation').trim(),attachment=v('lf-attachment').trim();
+  if(!title) return logToast('Título é obrigatório','error');
+  if(!responsible) return logToast('Responsável é obrigatório','error');
+  if(!startDate) return logToast('Data é obrigatória','error');
+  if(!motivation) return logToast('Motivo é obrigatório','error');
+  const payload={kind:isTest?'test':'action',title,type,channel,asset,responsible,startDate,status,motivation,attachment:attachment||null,endDate:null,hypothesis:null,targetMetric:null,expectedImprovement:null};
+  if(isTest){
+    const endDate=v('lf-end'),hypothesis=v('lf-hypothesis').trim(),targetMetric=v('lf-metric'),expectedImprovement=v('lf-expected');
+    if(!endDate) return logToast('Data de fim é obrigatória','error');
+    if(endDate<startDate) return logToast('Fim deve ser após início','error');
+    if(!hypothesis) return logToast('Hipótese é obrigatória','error');
+    if(!targetMetric) return logToast('Métrica-alvo é obrigatória','error');
+    if(!expectedImprovement) return logToast('Indique quanto pretende aumentar','error');
+    payload.endDate=endDate; payload.hypothesis=hypothesis; payload.targetMetric=targetMetric; payload.expectedImprovement=parseFloat(expectedImprovement);
+  }
+  let savedItem;
+  if(_logPanelState.mode==='edit'){
+    const idx=logData.findIndex(d=>d.id===_logPanelState.id);
+    logData[idx]={...logData[idx],...payload}; savedItem=logData[idx];
+    logToast('Registro atualizado','success');
+  } else {
+    savedItem={id:logUid(),...payload,valueBefore:null,valueAfter:null,result:null,learning:null,createdAt:new Date().toISOString()};
+    logData.unshift(savedItem);
+    logToast('Registro criado','success');
+  }
+  await _saveLogItem(savedItem);
+  logPopulateFilters(); closeLogPanel(); logRenderAll();
+}
+async function deleteLogItem(id){
+  if(!confirm('Tem certeza que deseja excluir este registro?')) return;
+  const item=logData.find(d=>d.id===id);
+  const isCampaign=item?.kind?.startsWith('campaign-');
+  logData=logData.filter(d=>d.id!==id);
+  await _deleteLogDb(id,isCampaign);
+  logToast('Registro excluído','success'); closeLogPanel(); logRenderAll();
+}
+function _renderLogFinishForm(){
+  const it=logData.find(d=>d.id===_logPanelState.id); if(!it) return;
+  document.getElementById('log-panel-title').innerHTML=`<span class="kind-badge kb-test">Teste</span> Finalizar`;
+  document.getElementById('log-panel-body').innerHTML=`
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:12px">${it.title}</h3>
+    <div class="detail-meta">
+      <div class="detail-meta-item"><div class="lbl">Métrica-alvo</div><div class="val">${it.targetMetric||'—'}</div></div>
+      <div class="detail-meta-item"><div class="lbl">Meta de melhoria</div><div class="val">+${it.expectedImprovement||'—'}</div></div>
+      <div class="detail-meta-item"><div class="lbl">Hipótese</div><div class="val" style="font-size:12px;color:var(--muted)">${it.hypothesis||'—'}</div></div>
+      <div class="detail-meta-item"><div class="lbl">Período</div><div class="val">${logFmtDate(it.startDate)} → ${logFmtDate(it.endDate)}</div></div>
+    </div>
+    <div class="form-section finish"><div class="form-section-title">📊 Resultado do teste</div>
+      <div class="log-form-row-2">
+        <div class="log-form-row"><label>Valor antes <span class="required">*</span></label>
+          <input type="number" step="0.01" id="lf-before" value="${it.valueBefore??''}" placeholder="Ex.: 23.4"></div>
+        <div class="log-form-row"><label>Valor depois <span class="required">*</span></label>
+          <input type="number" step="0.01" id="lf-after" value="${it.valueAfter??''}" placeholder="Ex.: 27.1"></div>
+      </div>
+      <div id="lf-finish-preview" style="font-size:12px;color:var(--muted);padding:8px 12px;background:#fff;border-radius:6px;margin-bottom:10px">Preencha os valores para ver o cálculo</div>
+      <div class="log-form-row"><label>Aprendizado / Conclusão <span class="required">*</span></label>
+        <textarea id="lf-learning" placeholder="O que aprendemos? Devemos replicar ou evitar?">${it.learning||''}</textarea></div>
+    </div>`;
+  document.getElementById('log-panel-foot').innerHTML=`
+    <div style="flex:1"></div>
+    <button class="btn btn-ghost btn-sm" onclick="closeLogPanel()">Cancelar</button>
+    <button class="btn btn-success" onclick="saveLogFinish('${it.id}')">Finalizar teste</button>`;
+  const update=()=>{
+    const b=parseFloat(document.getElementById('lf-before')?.value);
+    const a=parseFloat(document.getElementById('lf-after')?.value);
+    const prev=document.getElementById('lf-finish-preview'); if(!prev) return;
+    if(isNaN(b)||isNaN(a)){prev.textContent='Preencha os valores para ver o cálculo';return;}
+    const delta=a-b,target=it.expectedImprovement;
+    let label,color;
+    if(delta>=target){label='✅ POSITIVO — atingiu a meta';color='#10b981';}
+    else if(delta>0){label='≈ NEUTRO — melhorou mas não atingiu a meta';color='#94a3b8';}
+    else{label='❌ NEGATIVO — não houve melhora ou piorou';color='#ef4444';}
+    prev.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><div><strong style="color:${color}">${label}</strong><br><span style="font-size:11px">Variação: ${delta>=0?'+':''}${delta.toFixed(2)} (meta era +${target})</span></div></div>`;
+  };
+  document.getElementById('lf-before')?.addEventListener('input',update);
+  document.getElementById('lf-after')?.addEventListener('input',update);
+}
+async function saveLogFinish(id){
+  const it=logData.find(d=>d.id===id); if(!it) return;
+  const b=parseFloat(document.getElementById('lf-before')?.value);
+  const a=parseFloat(document.getElementById('lf-after')?.value);
+  const learning=(document.getElementById('lf-learning')?.value||'').trim();
+  if(isNaN(b)) return logToast('Valor antes é obrigatório','error');
+  if(isNaN(a)) return logToast('Valor depois é obrigatório','error');
+  if(!learning) return logToast('Aprendizado é obrigatório','error');
+  const delta=a-b,target=it.expectedImprovement;
+  it.valueBefore=b; it.valueAfter=a; it.learning=learning;
+  it.result=delta>=target?'positive':delta>0?'neutral':'negative';
+  it.status='done';
+  await _saveLogItem(it);
+  closeLogPanel(); logRenderAll();
+  logToast('Teste finalizado · '+(it.result==='positive'?'Positivo':it.result==='neutral'?'Neutro':'Negativo'),'success');
+}
+function _renderLogDetail(){
+  const it=logData.find(d=>d.id===_logPanelState.id); if(!it){closeLogPanel();return;}
+  document.getElementById('log-panel-title').innerHTML=`<span class="kind-badge ${it.kind==='test'?'kb-test':'kb-action'}">${it.kind==='test'?'Teste':'Ação'}</span> Detalhes`;
+  let impactHtml='';
+  if(it.result){
+    const icon=it.result==='positive'?'↑':it.result==='negative'?'↓':'≈';
+    const txt=it.result==='positive'?'Movimentou pra MELHOR':it.result==='negative'?'Movimentou pra PIOR':'Sem mudança significativa';
+    let delta='';
+    if(it.valueBefore!=null&&it.valueAfter!=null){const d=it.valueAfter-it.valueBefore;delta=`<div class="delta-row"><span>${it.targetMetric||'Antes → Depois'}</span><strong>${it.valueBefore} → ${it.valueAfter} <span style="color:${d>=0?'var(--success)':'var(--danger)'}">(${d>=0?'+':''}${d.toFixed(2)})</span></strong></div>`;}
+    impactHtml=`<div class="impact-card ${it.result}"><div class="impact-icon">${icon}</div><div class="impact-text"><strong>${txt}</strong><span>${it.targetMetric?'Métrica: '+it.targetMetric:''}</span></div></div>${delta}`;
+  } else if(it.kind==='test'&&it.status==='running'){
+    impactHtml=`<div class="impact-card neutral"><div class="impact-icon">⏳</div><div class="impact-text"><strong>Em execução</strong><span>Finalize o teste para registrar o resultado</span></div></div>`;
+  }
+  document.getElementById('log-panel-body').innerHTML=`
+    <h3 style="font-size:17px;font-weight:700;margin-bottom:10px">${it.title}</h3>
+    <div class="detail-meta">
+      <div class="detail-meta-item"><div class="lbl">Tipo</div><div class="val"><span class="tag-type-dot" style="background:${LOG_TYPES[it.type]?.color}"></span>${LOG_TYPES[it.type]?.name||'—'}</div></div>
+      <div class="detail-meta-item"><div class="lbl">Canal</div><div class="val">${CHANNELS[it.channel]?.name||'—'}</div></div>
+      <div class="detail-meta-item"><div class="lbl">Fluxo/Campanha</div><div class="val">${it.asset||'—'}</div></div>
+      <div class="detail-meta-item"><div class="lbl">Responsável</div><div class="val">${it.responsible||'—'}</div></div>
+      <div class="detail-meta-item"><div class="lbl">Data</div><div class="val">${logFmtDateFull(it.startDate)}${it.endDate?' → '+logFmtDateFull(it.endDate):''}</div></div>
+      <div class="detail-meta-item"><div class="lbl">Status</div><div class="val"><span class="tag tag-status-${it.status}">${LOG_STATUS[it.status]?.name||'—'}</span></div></div>
+    </div>
+    ${impactHtml}
+    <div class="detail-section"><h4>Motivo</h4><p>${it.motivation||'—'}</p></div>
+    ${it.kind==='test'?`<div class="detail-section"><h4>Hipótese</h4><p>${it.hypothesis||'—'}</p></div>
+      <div class="detail-section"><h4>Métrica-alvo · Meta</h4><p>${it.targetMetric||'—'} · +${it.expectedImprovement||'—'}</p></div>`:''}
+    ${it.learning?`<div class="detail-section"><h4>Aprendizado</h4><p>${it.learning}</p></div>`:''}
+    ${it.attachment?`<div class="detail-section"><h4>Anexo</h4><p><a href="${it.attachment}" target="_blank" style="color:var(--primary)">${it.attachment}</a></p></div>`:''}`;
+  const canFinish=it.kind==='test'&&it.status==='running';
+  document.getElementById('log-panel-foot').innerHTML=`
+    <button class="btn btn-danger btn-sm" onclick="deleteLogItem('${it.id}')">Excluir</button>
+    <div style="flex:1"></div>
+    <button class="btn btn-ghost btn-sm" onclick="closeLogPanel()">Fechar</button>
+    ${canFinish?`<button class="btn btn-success btn-sm" onclick="openLogFinishPanel('${it.id}')">Finalizar teste</button>`:''}
+    <button class="btn btn-sm" onclick="openLogPanel('edit','${it.kind}','${it.id}')">Editar</button>`;
+}
+
+// =========================================
+// LOG CRM — PAINEL DE CAMPANHAS
+// =========================================
+let _logCampPanelState={mode:null,kind:null,id:null,date:null};
+function openLogCampaignPanel(mode,kind,id,date){
+  _logCampPanelState={mode,kind,id,date};
+  document.getElementById('log-panel').classList.add('open');
+  document.getElementById('log-overlay').classList.add('open');
+  if(mode==='detail') _renderLogCampaignDetail();
+  else _renderLogCampaignForm();
+}
+function _renderLogCampaignForm(){
+  const isEC=_logCampPanelState.kind==='campaign-ec';
+  const it=(_logCampPanelState.id?logData.find(d=>d.id===_logCampPanelState.id):null)||{};
+  const initialDate=it.date||_logCampPanelState.date||logTodayISO();
+  const selBases=it.bases||[];
+  document.getElementById('log-panel-title').innerHTML=`<span class="kind-badge" style="background:${isEC?'#ddd6fe':'#fce7f3'};color:${isEC?'#6d28d9':'#be185d'}">${isEC?'E-mail Campanha':'WhatsApp Campanha'}</span> ${_logCampPanelState.mode==='edit'?'Editar':'Nova'}`;
+  let body=`<div class="log-form-row"><label>Nome da campanha <span class="required">*</span></label>
+    <input type="text" id="cf-name" value="${it.name||''}" placeholder="${isEC?'Ex.: Drop Coleção SS25':'Ex.: Flash Sale 24h'}"></div>
+    <div class="log-form-row"><label>Data <span class="required">*</span></label>
+    <input type="date" id="cf-date" value="${initialDate}"></div>
+    <div class="log-form-row"><label>${isEC?'Bases que vão receber':'Base'} <span class="required">*</span></label>
+    <div class="multi-select-grid" id="cf-bases">
+      ${(isEC?EMAIL_BASES:WPP_BASES.map(b=>b.name)).map(b=>{
+        const active=selBases.includes(b);
+        return `<label class="multi-select-item${active?' active':''}${!isEC?' '+wppBaseKind(b):''}" data-val="${b}">
+          <input type="checkbox" value="${b}" ${active?'checked':''}>${b}</label>`;
+      }).join('')}
+    </div></div>`;
+  if(isEC){
+    body+=`<div class="log-form-row"><label>Horário <span class="required">*</span></label>
+      <input type="time" id="cf-schedule" value="${it.schedule?.[0]||it.schedule||'10:00'}"></div>
+      <div class="log-form-row"><label>Modelo do e-mail <span class="required">*</span></label>
+      <select id="cf-model"><option value="">Selecione…</option>
+        ${Object.entries(EMAIL_MODELS).map(([k,v])=>`<option value="${k}" ${it.emailModel===k?'selected':''}>${v.name}</option>`).join('')}
+      </select></div>`;
+  } else {
+    const selTimes=it.schedule||[];
+    body+=`<div class="log-form-row"><label>Quantidade de pessoas <span class="required">*</span></label>
+      <input type="number" id="cf-qty" value="${it.quantity||''}" min="1" placeholder="Ex.: 5000"></div>
+      <div class="log-form-row"><label>Horários de disparo <span class="required">*</span></label>
+      <div class="multi-select-grid times" id="cf-times">
+        ${WPP_TIMES.map(t=>`<label class="multi-select-item${selTimes.includes(t)?' active':''}" data-val="${t}">
+          <input type="checkbox" value="${t}" ${selTimes.includes(t)?'checked':''}>${t}</label>`).join('')}
+      </div></div>`;
+  }
+  document.getElementById('log-panel-body').innerHTML=body;
+  document.getElementById('log-panel-foot').innerHTML=`
+    ${_logCampPanelState.mode==='edit'?`<button class="btn btn-danger btn-sm" onclick="deleteLogItem('${_logCampPanelState.id}')">Excluir</button>`:''}
+    <div style="flex:1"></div>
+    <button class="btn btn-ghost btn-sm" onclick="closeLogPanel()">Cancelar</button>
+    <button class="btn" onclick="saveLogCampaign()">Salvar</button>`;
+  document.querySelectorAll('#log-panel .multi-select-item').forEach(item=>{
+    item.addEventListener('click',e=>{e.preventDefault();const cb=item.querySelector('input');cb.checked=!cb.checked;item.classList.toggle('active',cb.checked);});
+  });
+}
+async function saveLogCampaign(){
+  const isEC=_logCampPanelState.kind==='campaign-ec';
+  const name=(document.getElementById('cf-name')?.value||'').trim();
+  const date=document.getElementById('cf-date')?.value||'';
+  const bases=[...document.querySelectorAll('#cf-bases input:checked')].map(i=>i.value);
+  if(!name) return logToast('Nome é obrigatório','error');
+  if(!date) return logToast('Data é obrigatória','error');
+  if(!bases.length) return logToast('Selecione pelo menos uma base','error');
+  const payload={kind:_logCampPanelState.kind,name,date,bases};
+  if(isEC){
+    const schedule=document.getElementById('cf-schedule')?.value||'';
+    const emailModel=document.getElementById('cf-model')?.value||'';
+    if(!schedule) return logToast('Horário é obrigatório','error');
+    if(!emailModel) return logToast('Modelo do e-mail é obrigatório','error');
+    payload.schedule=[schedule]; payload.emailModel=emailModel;
+  } else {
+    const qty=parseInt(document.getElementById('cf-qty')?.value||'0');
+    const times=[...document.querySelectorAll('#cf-times input:checked')].map(i=>i.value);
+    if(!qty||qty<1) return logToast('Quantidade é obrigatória','error');
+    if(!times.length) return logToast('Selecione pelo menos um horário','error');
+    payload.quantity=qty; payload.schedule=times;
+  }
+  let savedItem;
+  if(_logCampPanelState.mode==='edit'){
+    const idx=logData.findIndex(d=>d.id===_logCampPanelState.id);
+    logData[idx]={...logData[idx],...payload}; savedItem=logData[idx];
+    logToast('Campanha atualizada','success');
+  } else {
+    savedItem={id:logUid(),...payload,createdAt:new Date().toISOString()};
+    logData.unshift(savedItem);
+    logToast('Campanha criada','success');
+  }
+  await _saveCampaignDb(savedItem);
+  closeLogPanel(); logRenderAll();
+}
+function _renderLogCampaignDetail(){
+  const it=logData.find(d=>d.id===_logCampPanelState.id); if(!it){closeLogPanel();return;}
+  const isEC=it.kind==='campaign-ec';
+  document.getElementById('log-panel-title').innerHTML=`<span class="kind-badge" style="background:${isEC?'#ddd6fe':'#fce7f3'};color:${isEC?'#6d28d9':'#be185d'}">${isEC?'E-mail Campanha':'WhatsApp Campanha'}</span> Detalhes`;
+  const extraMeta=isEC?`<div class="detail-meta-item"><div class="lbl">Horário</div><div class="val">${(it.schedule?.[0]||it.schedule)||'—'}</div></div>
+    <div class="detail-meta-item"><div class="lbl">Modelo</div><div class="val"><span class="tag-type-dot" style="background:${EMAIL_MODELS[it.emailModel]?.color}"></span>${EMAIL_MODELS[it.emailModel]?.name||'—'}</div></div>`
+    :`<div class="detail-meta-item"><div class="lbl">Quantidade</div><div class="val">${it.quantity?.toLocaleString('pt-BR')||'—'} pessoas</div></div>
+    <div class="detail-meta-item"><div class="lbl">Horários</div><div class="val" style="font-size:12px">${(it.schedule||[]).join(' · ')||'—'}</div></div>`;
+  const basesHtml=(it.bases||[]).map(b=>isEC?`<span class="chip">${b}</span>`:`<span class="chip ${wppBaseKind(b)}">${b}</span>`).join('');
+  document.getElementById('log-panel-body').innerHTML=`
+    <h3 style="font-size:17px;font-weight:700;margin-bottom:10px">${it.name}</h3>
+    <div class="detail-meta">
+      <div class="detail-meta-item"><div class="lbl">Canal</div><div class="val">${isEC?'E-mail Campanha':'WhatsApp Campanha'}</div></div>
+      <div class="detail-meta-item"><div class="lbl">Data</div><div class="val">${logFmtDateFull(it.date)}</div></div>
+      ${extraMeta}
+    </div>
+    <div class="detail-section"><h4>Bases selecionadas (${it.bases?.length||0})</h4><p>${basesHtml||'—'}</p></div>`;
+  document.getElementById('log-panel-foot').innerHTML=`
+    <button class="btn btn-danger btn-sm" onclick="deleteLogItem('${it.id}')">Excluir</button>
+    <div style="flex:1"></div>
+    <button class="btn btn-ghost btn-sm" onclick="closeLogPanel()">Fechar</button>
+    <button class="btn" onclick="openLogCampaignPanel('edit','${it.kind}','${it.id}')">Editar</button>`;
+}
+
+// =========================================
+// LOG CRM — EXPORT CSV
+// =========================================
+function exportLogData(){
+  const items=logData.filter(d=>!(d.kind&&d.kind.startsWith('campaign-')));
+  if(!items.length){ logToast('Nenhum registro para exportar','error'); return; }
+  const headers=['Tipo','Título','Canal','Fluxo/Campanha','Responsável','Status','Data início','Data fim','Motivo','Hipótese','Métrica-alvo','Melhoria esperada','Valor antes','Valor depois','Resultado','Aprendizado','Anexo'];
+  const rows=items.map(it=>[
+    it.kind==='test'?'Teste':'Ação',
+    it.title,
+    CHANNELS[it.channel]?.name||it.channel||'',
+    it.asset||'',
+    it.responsible||'',
+    LOG_STATUS[it.status]?.name||it.status,
+    it.startDate||'',
+    it.endDate||'',
+    it.motivation||'',
+    it.hypothesis||'',
+    it.targetMetric||'',
+    it.expectedImprovement??'',
+    it.valueBefore??'',
+    it.valueAfter??'',
+    it.result?LOG_RESULTS[it.result].name:'',
+    it.learning||'',
+    it.attachment||''
+  ].map(v=>`"${String(v).replace(/"/g,'""')}"`));
+  const csv=[headers.map(h=>`"${h}"`).join(','),...rows.map(r=>r.join(','))].join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='log-crm-'+logTodayISO()+'.csv';a.click();
+  URL.revokeObjectURL(url); logToast('CSV exportado com '+items.length+' registros','success');
+}
+
+// =========================================
+// LOG CRM — TOAST
+// =========================================
+function logToast(msg,kind=''){
+  const el=document.createElement('div');
+  el.className='log-toast'+(kind?' '+kind:'');
+  el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),2400);
+}
+
+// =========================================
+// LOG CRM — FILTROS E NAVEGAÇÃO
+// =========================================
+function resetLogFilters(scope){
+  const ids={
+    list:['f-log-channel','f-log-type','f-log-resp','f-log-kind','f-log-search'],
+    run: ['f-log-run-channel','f-log-run-kind','f-log-run-search'],
+    done:['f-log-done-channel','f-log-done-kind','f-log-done-result','f-log-done-search']
+  }[scope]||[];
+  ids.forEach(id=>{const el=document.getElementById(id);if(!el) return;if(el.tagName==='SELECT') el.value='all';else el.value='';});
+  logRenderAll();
+}
+function _initLogTabs(){
+  // Tabs principais do Log (Backlog / Campanhas / Biblioteca)
+  document.querySelectorAll('#page-log .log-tab-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      document.querySelectorAll('#page-log .log-tab-btn').forEach(x=>x.classList.remove('active'));
+      document.querySelectorAll('#page-log .log-page').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      const tab=b.dataset.logtab;
+      document.getElementById('log-page-'+tab)?.classList.add('active');
+      const btns=document.getElementById('log-header-btns');
+      if(btns) btns.style.display=(tab==='campaigns')?'none':'flex';
+      if(tab==='campaigns') renderCalendar('cal-ec');
+      if(tab==='backlog'){const ac=document.querySelector('#log-page-backlog .sub-tab-btn.active');if(ac&&ac.dataset.sub==='cal') renderCalendar('cal-test');}
+    });
+  });
+  // Sub-tabs do Backlog
+  document.querySelectorAll('#log-page-backlog .sub-tab-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      document.querySelectorAll('#log-page-backlog .sub-tab-btn').forEach(x=>x.classList.remove('active'));
+      document.querySelectorAll('#log-page-backlog .sub-page').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      const sub=b.dataset.sub;
+      document.getElementById('log-sub-'+sub)?.classList.add('active');
+      if(sub==='cal') renderCalendar('cal-test');
+    });
+  });
+  // Sub-tabs do Calendário de Campanhas
+  document.querySelectorAll('#log-page-campaigns .sub-tab-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      document.querySelectorAll('#log-page-campaigns .sub-tab-btn').forEach(x=>x.classList.remove('active'));
+      document.querySelectorAll('#log-page-campaigns .sub-page').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      const sub=b.dataset.sub;
+      document.getElementById('log-sub-'+sub)?.classList.add('active');
+      if(sub==='ec') renderCalendar('cal-ec');
+      if(sub==='wc') renderCalendar('cal-wc');
+    });
+  });
+  // Listeners de filtro
+  ['f-log-channel','f-log-type','f-log-resp','f-log-kind','f-log-search'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input',renderLogList);
+  });
+  ['f-log-run-channel','f-log-run-kind','f-log-run-search'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input',renderLogRunning);
+  });
+  ['f-log-done-channel','f-log-done-kind','f-log-done-result','f-log-done-search'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input',renderLogDone);
+  });
+}
+function logRenderAll(){
+  renderLogKPIs(); renderLogList(); renderLogRunning(); renderLogDone(); renderLogLibrary();
+  ['cal-test','cal-ec','cal-wc'].forEach(k=>{
+    const m=document.getElementById(calState[k].mount);
+    if(m&&m.querySelector('.calendar-wrap')) drawCalendar(k);
+  });
+}
+
 checkAuth(); // verifica sessão → mostra overlay ou carrega dashboard
 updateAssetFilter('resumo');
 
