@@ -1079,45 +1079,35 @@ function _efFallbackWindow() {
 }
 async function fetchEmailFlowAssets(start, end) {
   async function _run(s, e) {
-    const [{ data: rows, error }, { data: utmRows }] = await Promise.all([
-      _sb.from('flow_email_metrics')
-        .select('flow_id,flow_name,email_enviado,email_aberto,email_clicado,data')
+    const [{ data: rows, error }, { data: revRows }] = await Promise.all([
+      _sb.from('vw_flow_email_assets')
+        .select('flow_id,flow_name,data,sends,opens,clicks,utm_campaign,utm_term')
         .gte('data', s).lte('data', e).limit(50000),
-      _sb.from('flow_utm_config').select('flow_name,utm_campaign'),
+      _sb.from('vw_flow_email_revenue')
+        .select('flow_name,revenue_brl')
+        .gte('order_date', s).lte('order_date', e).limit(50000),
     ]);
     if (error) { console.error('fetchEmailFlowAssets error:', error); return []; }
     if (!(rows || []).length) return [];
-    const utmMap = {};
-    for (const u of utmRows || []) utmMap[u.flow_name] = u.utm_campaign;
+    // Receita por flow_name (já considera utm_term no banco)
+    const revMap = {};
+    for (const r of revRows || []) {
+      revMap[r.flow_name] = (revMap[r.flow_name] || 0) + parseFloat(r.revenue_brl || 0);
+    }
     const agg = {};
     for (const r of rows) {
       const fid = r.flow_id;
       if (!agg[fid]) agg[fid] = {
         asset_id: fid, asset_name: r.flow_name, asset_type: 'flow', is_active: true,
         sends: 0, opens: 0, clicks: 0, bounces: 0, unsubscribes: 0,
-        revenue_brl: 0, utm_campaign: utmMap[r.flow_name] || null,
-        has_utm: !!(utmMap[r.flow_name]), _daySet: new Set(),
+        revenue_brl: revMap[r.flow_name] || 0,
+        utm_campaign: r.utm_campaign || null, utm_term: r.utm_term || null,
+        has_utm: !!(r.utm_campaign), _daySet: new Set(),
       };
-      agg[fid].sends  += +(r.email_enviado  || 0);
-      agg[fid].opens  += +(r.email_aberto   || 0);
-      agg[fid].clicks += +(r.email_clicado  || 0);
+      agg[fid].sends  += +(r.sends  || 0);
+      agg[fid].opens  += +(r.opens  || 0);
+      agg[fid].clicks += +(r.clicks || 0);
       agg[fid]._daySet.add(r.data);
-    }
-    // Receita por UTM campaign (consulta direta a fact_orders)
-    const campaigns = Object.values(agg).filter(f => f.utm_campaign).map(f => f.utm_campaign);
-    if (campaigns.length) {
-      const { data: ordData } = await _sb.from('fact_orders')
-        .select('utm_campaign,revenue_brl')
-        .eq('utm_source', 'email').in('utm_medium', ['email_fluxo','fluxos_crm'])
-        .gte('order_date', s).lte('order_date', e).limit(50000);
-      const revMap = {};
-      for (const o of ordData || []) {
-        const k = (o.utm_campaign || '').toLowerCase();
-        revMap[k] = (revMap[k] || 0) + parseFloat(o.revenue_brl || 0);
-      }
-      Object.values(agg).forEach(f => {
-        if (f.utm_campaign) f.revenue_brl = revMap[f.utm_campaign.toLowerCase()] || 0;
-      });
     }
     return Object.values(agg).map(f => {
       const ndays = f._daySet.size;
@@ -1125,7 +1115,7 @@ async function fetchEmailFlowAssets(start, end) {
         asset_id: f.asset_id, asset_name: f.asset_name, asset_type: f.asset_type,
         is_active: f.is_active, sends: f.sends, opens: f.opens, clicks: f.clicks,
         bounces: 0, unsubscribes: 0, revenue_brl: f.revenue_brl,
-        utm_campaign: f.utm_campaign, has_utm: f.has_utm,
+        utm_campaign: f.utm_campaign, utm_term: f.utm_term, has_utm: f.has_utm,
         open_rate_pct: f.sends > 0 ? +(f.opens / f.sends * 100).toFixed(2) : 0,
         ctor_pct:      f.opens > 0 ? +(f.clicks / f.opens * 100).toFixed(2) : 0,
         sends_per_day: ndays > 0 ? +(f.sends / ndays).toFixed(1) : 0,
@@ -1137,24 +1127,64 @@ async function fetchEmailFlowAssets(start, end) {
   return result;
 }
 async function fetchEmailFlowItems(start, end) {
+  // Normaliza utm_content: 'em001', 'em01', 'em1', 'em2.2' → número inteiro (1, 1, 1, 2)
+  const _normContent = c => {
+    const m = (c || '').toLowerCase().match(/^em0*([1-9][0-9]*)/);
+    return m ? parseInt(m[1], 10) : null;
+  };
   async function _run(s, e) {
-    const { data: rows, error } = await _sb.from('flow_email_metrics')
-      .select('flow_id,flow_name,message_id,message_name,email_enviado,email_aberto,email_clicado')
-      .gte('data', s).lte('data', e).limit(50000);
+    const [{ data: rows, error }, { data: revRows }] = await Promise.all([
+      _sb.from('vw_flow_email_items')
+        .select('flow_id,message_id,message_name,sends,opens,clicks,utm_campaign,utm_term')
+        .gte('data', s).lte('data', e).limit(50000),
+      _sb.from('vw_flow_item_revenue')
+        .select('utm_campaign,utm_term,utm_content,revenue_brl')
+        .gte('order_date', s).lte('order_date', e).limit(50000),
+    ]);
     if (error) { console.error('fetchEmailFlowItems error:', error); return []; }
     if (!(rows || []).length) return [];
+    // Mapa de receita: chave = 'campaign|term|emNum' ou 'campaign||emNum' (quando term null)
+    const revFull = {}, revCamp = {};
+    for (const r of revRows || []) {
+      const n = _normContent(r.utm_content);
+      if (n === null) continue;
+      const c = (r.utm_campaign || '').toLowerCase();
+      const t = (r.utm_term || '').toLowerCase();
+      const kFull = `${c}|${t}|${n}`;
+      const kCamp = `${c}||${n}`;
+      revFull[kFull] = (revFull[kFull] || 0) + parseFloat(r.revenue_brl || 0);
+      revCamp[kCamp] = (revCamp[kCamp] || 0) + parseFloat(r.revenue_brl || 0);
+    }
+    // Agrega por message_id com receita
     const agg = {};
     for (const r of rows) {
       const mid = r.message_id;
-      if (!agg[mid]) agg[mid] = {
-        asset_id: r.flow_id, item_id: mid,
-        item_name: r.message_name, item_position: 9999, is_active: true,
-        sends: 0, opens: 0, clicks: 0, bounces: 0, unsubscribes: 0,
-        open_rate_pct: 0, ctor_pct: 0, revenue_brl: null, has_utm: false,
-      };
-      agg[mid].sends  += +(r.email_enviado  || 0);
-      agg[mid].opens  += +(r.email_aberto   || 0);
-      agg[mid].clicks += +(r.email_clicado  || 0);
+      if (!agg[mid]) {
+        // Extrai número do e-mail a partir do message_name: [EM001] → 1
+        const emMatch = (r.message_name || '').match(/\[EM(\d+)\]/i);
+        const emNum = emMatch ? parseInt(emMatch[1], 10) : null;
+        let revenue_brl = null;
+        if (emNum !== null && r.utm_campaign) {
+          const c = r.utm_campaign.toLowerCase();
+          if (r.utm_term) {
+            const rev = revFull[`${c}|${r.utm_term.toLowerCase()}|${emNum}`];
+            if (rev !== undefined) revenue_brl = rev;
+          } else {
+            const rev = revCamp[`${c}||${emNum}`];
+            if (rev !== undefined) revenue_brl = rev;
+          }
+        }
+        agg[mid] = {
+          asset_id: r.flow_id, item_id: mid,
+          item_name: r.message_name, item_position: 9999, is_active: true,
+          sends: 0, opens: 0, clicks: 0, bounces: 0, unsubscribes: 0,
+          open_rate_pct: 0, ctor_pct: 0,
+          revenue_brl: revenue_brl, has_utm: !!(r.utm_campaign),
+        };
+      }
+      agg[mid].sends  += +(r.sends  || 0);
+      agg[mid].opens  += +(r.opens  || 0);
+      agg[mid].clicks += +(r.clicks || 0);
     }
     return Object.values(agg).map(f => ({
       asset_id: f.asset_id, item_id: f.item_id,
@@ -1162,7 +1192,7 @@ async function fetchEmailFlowItems(start, end) {
       sends: f.sends, opens: f.opens, clicks: f.clicks, bounces: 0, unsubscribes: 0,
       open_rate_pct: f.sends > 0 ? +(f.opens / f.sends * 100).toFixed(2) : 0,
       ctor_pct:      f.opens > 0 ? +(f.clicks / f.opens * 100).toFixed(2) : 0,
-      revenue_brl: null, has_utm: false,
+      revenue_brl: f.revenue_brl, has_utm: f.has_utm,
     })).filter(f => f.sends > 0);
   }
   let result = await _run(start, end);
@@ -1170,32 +1200,30 @@ async function fetchEmailFlowItems(start, end) {
   return result;
 }
 async function fetchFlowDailyMetrics(flowName, start, end) {
-  const {data} = await _sb.from('flow_email_metrics')
-    .select('data, email_enviado, email_aberto, email_clicado')
+  const {data} = await _sb.from('vw_flow_email_assets')
+    .select('data, sends, opens, clicks')
     .eq('flow_name', flowName).gte('data', start).lte('data', end);
   const byDay = {};
   for (const r of data || []) {
     if (!byDay[r.data]) byDay[r.data] = {sends:0, opens:0, clicks:0};
-    byDay[r.data].sends  += +r.email_enviado  || 0;
-    byDay[r.data].opens  += +r.email_aberto   || 0;
-    byDay[r.data].clicks += +r.email_clicado  || 0;
+    byDay[r.data].sends  += +r.sends  || 0;
+    byDay[r.data].opens  += +r.opens  || 0;
+    byDay[r.data].clicks += +r.clicks || 0;
   }
   return byDay;
 }
-async function fetchFlowDailyRevenue(utmCampaign, start, end) {
-  if (!utmCampaign) return { byDay:{}, total:0, orders:0 };
-  const {data} = await _sb.from('fact_orders')
-    .select('order_date, revenue_brl')
-    .eq('utm_source', 'email')
-    .in('utm_medium', ['email_fluxo','fluxos_crm'])
-    .ilike('utm_campaign', utmCampaign)
+async function fetchFlowDailyRevenue(flowName, start, end) {
+  if (!flowName) return { byDay:{}, total:0, orders:0 };
+  const {data} = await _sb.from('vw_flow_email_revenue')
+    .select('order_date, revenue_brl, orders')
+    .eq('flow_name', flowName)
     .gte('order_date', start).lte('order_date', end);
   const byDay = {};
   let total = 0, orders = 0;
   for (const r of data || []) {
     byDay[r.order_date] = (byDay[r.order_date] || 0) + parseFloat(r.revenue_brl || 0);
     total += parseFloat(r.revenue_brl || 0);
-    orders++;
+    orders += +(r.orders || 0);
   }
   return { byDay, total, orders };
 }
@@ -1779,7 +1807,7 @@ async function renderChannel(key){
       if (selRow) {
         const [flowEmDaily, flowRevData] = await Promise.all([
           fetchFlowDailyMetrics(flowSel, start, end),
-          fetchFlowDailyRevenue(selRow.utm_campaign, start, end),
+          fetchFlowDailyRevenue(selRow.asset_name, start, end),
         ]);
         // Sobrescreve emByDay com dados do fluxo selecionado
         emByDay = {};
@@ -2243,11 +2271,9 @@ function renderEmailAssetTable(key, rows, color, flowItems){
           const isEM001 = /EM001/i.test(p.item_name||'');
           const pInscritos = isEM001 ? fmtInt(+p.sends||0) : '—';
           const pRev = p.revenue_brl;
-          const pRevDisplay = pRev === null
-            ? '<span style="color:#f59e0b;font-size:11px">⚠ sem UTM</span>'
-            : fmtBRLfull(+pRev||0);
+          const pRevDisplay = pRev === null ? '—' : fmtBRLfull(+pRev||0);
           const pEM001sends = isEM001 ? (+p.sends||0) : 0;
-          const pRecInsc = (pRev !== null && pEM001sends > 0) ? fmtBRL2((+pRev||0)/pEM001sends) : '—';
+          const pRecInsc = (pRev !== null && pRev > 0 && pEM001sends > 0) ? fmtBRL2((+pRev||0)/pEM001sends) : '—';
           parts.push(`<tr class="nested" data-parent="ef-${idx}">
             <td>↳ ${p.item_name||'—'}</td>
             <td class="num">${pInscritos}</td>

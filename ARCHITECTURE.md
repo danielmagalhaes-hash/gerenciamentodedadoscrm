@@ -84,7 +84,7 @@ O resultado: dados de Shopify, Klaviyo e GA4 aparecem unificados num único pain
 #### dashboard-frontend
 - **Responsabilidade:** Renderizar dados do Supabase no dashboard HTML
 - **Arquivo:** `dashboard-crm.html`
-- **Lê:** tabelas diretas (`flow_email_metrics`, `campaign_email_metrics`, `flow_utm_config`, `fact_orders`) + views `vw_*`
+- **Lê:** views `vw_*` exclusivamente — incluindo `vw_flow_email_assets` e `vw_flow_email_items` para E-mail Fluxo, `fact_orders` para receita por fluxo
 - **Estado:** ✅ ativo
 
 ### Módulos planejados (Fase 2)
@@ -347,6 +347,8 @@ Registro de execuções dos cron jobs — usado pelo banner de alertas no dashbo
 | `vw_form_performance` | Performance acumulada por formulário | Dashboard (tabela Formulários e Popups) |
 | `vw_email_channel_daily` | Disparos, aberturas, cliques por canal de e-mail por dia | Dashboard (Métricas específicas E-mail Fluxo/Campanha) |
 | `vw_campaign_email_metrics` | Performance por campanha com receita atribuída | Dashboard (tabela E-mail Campanha) |
+| `vw_flow_email_assets` | Disparos/aberturas/cliques por `(flow_id, flow_name, data)` + `utm_campaign` via JOIN com `flow_utm_config` | Dashboard (Detalhamento por Fluxo, Rankings, Receita/Inscrito) |
+| `vw_flow_email_items` | Disparos/aberturas/cliques por `(message_id, message_name, data)` — para drill-down por e-mail dentro do fluxo | Dashboard (tabela de e-mails ao clicar num fluxo, cálculo de inscritos) |
 
 ### Views prontas mas não conectadas ao dashboard (próxima versão)
 
@@ -445,7 +447,7 @@ Registro de execuções dos cron jobs — usado pelo banner de alertas no dashbo
 | 2026-06-01 | Migração para Vercel Cron Jobs | Crons nativos da Vercel; sem servidor externo; logs em `cron_logs` | Muitas fontes simultâneas podem exigir Vercel Queues |
 | 2026-06-01 | Autenticação server-side via Flask + JWT Supabase | Dashboard interno; cookie `sb_token` | Usuários externos exigiriam Supabase Auth flow completo |
 | 2026-06-01 | `flow_email_metrics` separada de `fact_email_sends` | Granularidade de flow-message × dia; evita mistura com campanhas | Unificação futura exige migration |
-| 2026-06-03 | Dashboard consulta `flow_email_metrics` diretamente (sem RPC) | RPCs não retornavam dados no browser (supabase-js); query direta + JS resolve | — |
+| 2026-06-03 | Dashboard consulta `vw_flow_email_assets` e `vw_flow_email_items` (views) em vez de `flow_email_metrics` direto | Queries diretas à tabela via supabase-js retornavam array vazio no browser; views (security definer) contornam o problema. Segue R11. | Queries diretas a `flow_email_metrics` via anon key são instáveis — sempre usar view |
 | 2026-06-03 | Crons com lookback D-2 a D-1 | Auto-recuperação: se cron falhar um dia, a próxima execução recupera automaticamente | — |
 | 2026-06-03 | Endpoint `/admin/backfill/<job>` para recuperação manual | Permite backfill via browser sem precisar de CRON_SECRET ou CLI | Requer AUTH_ENABLED=True para segurança em produção |
 
