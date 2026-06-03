@@ -770,24 +770,96 @@ function _efFallbackWindow() {
   return { start: start.toISOString().slice(0,10), end: end.toISOString().slice(0,10) };
 }
 async function fetchEmailFlowAssets(start, end) {
-  let {data, error} = await _sb.rpc('get_email_flow_asset_metrics', {p_start: start, p_end: end});
-  if (error) { console.error('fetchEmailFlowAssets error:', error); return []; }
-  if (!data || !data.length) {
-    const fb = _efFallbackWindow();
-    const {data: fd} = await _sb.rpc('get_email_flow_asset_metrics', {p_start: fb.start, p_end: fb.end});
-    return fd || [];
+  async function _run(s, e) {
+    const [{ data: rows, error }, { data: utmRows }] = await Promise.all([
+      _sb.from('flow_email_metrics')
+        .select('flow_id,flow_name,email_enviado,email_aberto,email_clicado,data')
+        .gte('data', s).lte('data', e).limit(50000),
+      _sb.from('flow_utm_config').select('flow_name,utm_campaign'),
+    ]);
+    if (error) { console.error('fetchEmailFlowAssets error:', error); return []; }
+    if (!(rows || []).length) return [];
+    const utmMap = {};
+    for (const u of utmRows || []) utmMap[u.flow_name] = u.utm_campaign;
+    const agg = {};
+    for (const r of rows) {
+      const fid = r.flow_id;
+      if (!agg[fid]) agg[fid] = {
+        asset_id: fid, asset_name: r.flow_name, asset_type: 'flow', is_active: true,
+        sends: 0, opens: 0, clicks: 0, bounces: 0, unsubscribes: 0,
+        revenue_brl: 0, utm_campaign: utmMap[r.flow_name] || null,
+        has_utm: !!(utmMap[r.flow_name]), _daySet: new Set(),
+      };
+      agg[fid].sends  += +(r.email_enviado  || 0);
+      agg[fid].opens  += +(r.email_aberto   || 0);
+      agg[fid].clicks += +(r.email_clicado  || 0);
+      agg[fid]._daySet.add(r.data);
+    }
+    // Receita por UTM campaign (consulta direta a fact_orders)
+    const campaigns = Object.values(agg).filter(f => f.utm_campaign).map(f => f.utm_campaign);
+    if (campaigns.length) {
+      const { data: ordData } = await _sb.from('fact_orders')
+        .select('utm_campaign,revenue_brl')
+        .eq('utm_source', 'email').in('utm_medium', ['email_fluxo','fluxos_crm'])
+        .gte('order_date', s).lte('order_date', e).limit(50000);
+      const revMap = {};
+      for (const o of ordData || []) {
+        const k = (o.utm_campaign || '').toLowerCase();
+        revMap[k] = (revMap[k] || 0) + parseFloat(o.revenue_brl || 0);
+      }
+      Object.values(agg).forEach(f => {
+        if (f.utm_campaign) f.revenue_brl = revMap[f.utm_campaign.toLowerCase()] || 0;
+      });
+    }
+    return Object.values(agg).map(f => {
+      const ndays = f._daySet.size;
+      return {
+        asset_id: f.asset_id, asset_name: f.asset_name, asset_type: f.asset_type,
+        is_active: f.is_active, sends: f.sends, opens: f.opens, clicks: f.clicks,
+        bounces: 0, unsubscribes: 0, revenue_brl: f.revenue_brl,
+        utm_campaign: f.utm_campaign, has_utm: f.has_utm,
+        open_rate_pct: f.sends > 0 ? +(f.opens / f.sends * 100).toFixed(2) : 0,
+        ctor_pct:      f.opens > 0 ? +(f.clicks / f.opens * 100).toFixed(2) : 0,
+        sends_per_day: ndays > 0 ? +(f.sends / ndays).toFixed(1) : 0,
+      };
+    }).sort((a, b) => b.sends - a.sends);
   }
-  return data;
+  let result = await _run(start, end);
+  if (!result.length) { const fb = _efFallbackWindow(); result = await _run(fb.start, fb.end); }
+  return result;
 }
 async function fetchEmailFlowItems(start, end) {
-  let {data, error} = await _sb.rpc('get_email_flow_item_metrics', {p_start: start, p_end: end});
-  if (error) { console.error('fetchEmailFlowItems error:', error); return []; }
-  if (!data || !data.length) {
-    const fb = _efFallbackWindow();
-    const {data: fd} = await _sb.rpc('get_email_flow_item_metrics', {p_start: fb.start, p_end: fb.end});
-    return fd || [];
+  async function _run(s, e) {
+    const { data: rows, error } = await _sb.from('flow_email_metrics')
+      .select('flow_id,flow_name,message_id,message_name,email_enviado,email_aberto,email_clicado')
+      .gte('data', s).lte('data', e).limit(50000);
+    if (error) { console.error('fetchEmailFlowItems error:', error); return []; }
+    if (!(rows || []).length) return [];
+    const agg = {};
+    for (const r of rows) {
+      const mid = r.message_id;
+      if (!agg[mid]) agg[mid] = {
+        asset_id: r.flow_id, item_id: mid,
+        item_name: r.message_name, item_position: 9999, is_active: true,
+        sends: 0, opens: 0, clicks: 0, bounces: 0, unsubscribes: 0,
+        open_rate_pct: 0, ctor_pct: 0, revenue_brl: null, has_utm: false,
+      };
+      agg[mid].sends  += +(r.email_enviado  || 0);
+      agg[mid].opens  += +(r.email_aberto   || 0);
+      agg[mid].clicks += +(r.email_clicado  || 0);
+    }
+    return Object.values(agg).map(f => ({
+      asset_id: f.asset_id, item_id: f.item_id,
+      item_name: f.item_name, item_position: f.item_position, is_active: f.is_active,
+      sends: f.sends, opens: f.opens, clicks: f.clicks, bounces: 0, unsubscribes: 0,
+      open_rate_pct: f.sends > 0 ? +(f.opens / f.sends * 100).toFixed(2) : 0,
+      ctor_pct:      f.opens > 0 ? +(f.clicks / f.opens * 100).toFixed(2) : 0,
+      revenue_brl: null, has_utm: false,
+    })).filter(f => f.sends > 0);
   }
-  return data;
+  let result = await _run(start, end);
+  if (!result.length) { const fb = _efFallbackWindow(); result = await _run(fb.start, fb.end); }
+  return result;
 }
 async function fetchFlowDailyMetrics(flowName, start, end) {
   const {data} = await _sb.from('flow_email_metrics')
