@@ -146,7 +146,6 @@ def get_latest_dates(sb: Client) -> dict[str, date | None]:
 
     return {
         "orders":        _latest("fact_orders",        "order_date"),
-        "email_sends":   _latest("fact_email_sends",   "date"),
         "sessions":      _latest("fact_sessions",      "date"),
         "form_captures": _latest("fact_lead_captures", "date"),
     }
