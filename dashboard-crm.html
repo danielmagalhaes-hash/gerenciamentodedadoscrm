@@ -750,7 +750,7 @@ async function fetchEmailChannelDaily(slug, start, end) {
 }
 async function fetchEmailAssets(slug, start, end) {
   const isCampaign = slug === 'email_campaign';
-  const viewName = isCampaign ? 'vw_campaign_email_metrics' : 'vw_email_asset_metrics';
+  const viewName = 'vw_campaign_email_metrics';
   let q = _sb.from(viewName)
     .select('asset_id,asset_name,asset_type,is_active,first_date,last_date,send_date,sends,opens,clicks,bounces,unsubscribes,open_rate_pct,ctor_pct,sends_per_day,revenue_brl,revenue_per_send')
     .eq('channel_slug', slug)
