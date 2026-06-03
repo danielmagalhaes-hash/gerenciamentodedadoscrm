@@ -168,7 +168,9 @@ def run_forms_ingestion(since: date | None = None) -> None:
         form_metrics_since = since
         logger.info({"event": "forms_backfill_forced", "since": since.isoformat()})
     elif latest.get("form_captures"):
-        form_metrics_since = latest["form_captures"] + timedelta(days=1)
+        # Rebusca sempre com 2 dias de lookback para corrigir dados parciais
+        # (cron roda às 9h UTC, dados do Klaviyo têm lag de até 24h)
+        form_metrics_since = latest["form_captures"] - timedelta(days=1)
         if form_metrics_since > today:
             logger.info({"event": "forms_skip", "reason": "banco já atualizado"})
             logger.info("=== Formulários: sem dados novos ===")

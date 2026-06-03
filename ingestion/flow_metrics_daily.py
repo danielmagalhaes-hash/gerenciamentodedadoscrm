@@ -50,8 +50,10 @@ def run_for_period(date_from: date, date_to: date) -> None:
 
 
 def run_yesterday() -> None:
-    yesterday = date.today() - timedelta(days=1)
-    run_for_period(yesterday, yesterday)
+    # Rebusca os últimos 2 dias para recuperar automaticamente falhas do dia anterior
+    two_days_ago = date.today() - timedelta(days=2)
+    yesterday    = date.today() - timedelta(days=1)
+    run_for_period(two_days_ago, yesterday)
 
 
 def main() -> None:
