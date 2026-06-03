@@ -10,5 +10,9 @@
     { "path": "/api/cron/email_flow",     "schedule": "0 7 * * *"   },
     { "path": "/api/cron/email_campaign", "schedule": "30 3 * * *"  },
     { "path": "/api/cron/forms",          "schedule": "0 9 * * *"   }
-  ]
+  ],
+  "functions": {
+    "api/cron/email_flow.py": { "maxDuration": 800 },
+    "api/cron/app.py":        { "maxDuration": 800 }
+  }
 }

@@ -239,6 +239,57 @@ def email_campaign():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/admin/backfill/<job>')
+def admin_backfill(job: str):
+    """Disparo manual de backfill. Acessível enquanto AUTH_ENABLED=False.
+    Exemplos:
+      /admin/backfill/email_flow?since=2026-06-02
+      /admin/backfill/email_flow?since=2026-06-01&until=2026-06-02
+      /admin/backfill/sessions
+      /admin/backfill/forms
+      /admin/backfill/revenue
+    """
+    VALID = {'email_flow', 'email_campaign', 'sessions', 'forms', 'revenue'}
+    if job not in VALID:
+        return jsonify({'error': f'Job inválido. Use: {sorted(VALID)}'}), 400
+
+    since_str = request.args.get('since')
+    until_str = request.args.get('until', since_str)
+
+    try:
+        from datetime import date as _date
+        if job == 'email_flow':
+            from ingestion.flow_metrics_daily import run_for_period, run_yesterday
+            if since_str:
+                run_for_period(_date.fromisoformat(since_str), _date.fromisoformat(until_str))
+            else:
+                run_yesterday()
+        elif job == 'email_campaign':
+            from ingestion.campaign_metrics_daily import run_for_period as _camp_period, run_yesterday as _camp_yest
+            if since_str:
+                _camp_period(_date.fromisoformat(since_str), _date.fromisoformat(until_str))
+            else:
+                _camp_yest()
+        elif job == 'sessions':
+            from ingestion.main import run_sheets_ingestion
+            run_sheets_ingestion()
+        elif job == 'forms':
+            from ingestion.main import run_forms_ingestion
+            run_forms_ingestion()
+        elif job == 'revenue':
+            from ingestion.main import run_smart_shopify_ingestion
+            run_smart_shopify_ingestion()
+
+        from ingestion.alert import log_cron
+        log_cron(job, 'ok')
+        return jsonify({'status': 'ok', 'job': job, 'since': since_str, 'until': until_str})
+    except Exception as e:
+        logger.error({'event': 'backfill_failed', 'job': job, 'error': str(e)})
+        from ingestion.alert import send_failure_alert
+        send_failure_alert(job, str(e))
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/cron/forms', methods=['GET'])
 def forms():
     if not _authorized():
