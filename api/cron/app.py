@@ -50,6 +50,9 @@ def _get_auth_email() -> str | None:
     return 'authenticated'
 
 
+# Para reativar o login: mudar AUTH_ENABLED para True
+_AUTH_ENABLED = False
+
 _LOGIN_HTML = f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -116,7 +119,7 @@ document.getElementById('pwd').addEventListener('keydown', e => {{ if(e.key==='E
 @app.route('/')
 @app.route('/dashboard-crm.html')
 def dashboard():
-    if not _get_auth_email():
+    if _AUTH_ENABLED and not _get_auth_email():
         return _LOGIN_HTML, 200, {'Content-Type': 'text/html; charset=utf-8'}
     path = os.path.join(_ROOT, 'dashboard-crm.html')
     with open(path, 'r', encoding='utf-8') as f:
