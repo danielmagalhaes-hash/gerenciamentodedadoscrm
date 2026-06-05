@@ -1,7 +1,7 @@
 # ARCHITECTURE.md — Dashboard CRM · Minimal Club
 
 > Mapa vivo do sistema. Lido em TODA sessão. Atualizado ao FIM de toda sessão.
-> Última atualização: 2026-06-03
+> Última atualização: 2026-06-05
 
 ---
 
@@ -37,13 +37,23 @@ O resultado: dados de Shopify, Klaviyo e GA4 aparecem unificados num único pain
 - **Cron:** `10 * * * *` — a cada hora aos :10
 - **Estado:** ✅ ativo
 
+#### ingestion-email-structure
+- **Responsabilidade:** Sincronizar estrutura de fluxos ativos (fluxos + e-mails individuais) do Klaviyo para `dim_assets` e `dim_asset_items`
+- **Entry point:** `api/cron/email_structure.py` → `ingestion/flow_structure_daily.py:run_structure_sync()`
+- **Fontes:** `ingestion/sources/klaviyo_structure_sync.py`
+- **Cron:** `0 6 * * *` — todo dia às 03:00 BRT (06:00 UTC) — 1h antes do email_flow
+- **maxDuration:** 600s
+- **Por que existe:** elimina ~500 chamadas GET de estrutura do cron email_flow, que causavam 429s e timeout na Vercel
+- **Estado:** ✅ ativo
+
 #### ingestion-email-flow
 - **Responsabilidade:** Buscar métricas diárias de e-mails de fluxos Klaviyo e gravar em `flow_email_metrics`
 - **Entry point:** `api/cron/email_flow.py` → `ingestion/flow_metrics_daily.py:run_yesterday()`
 - **Fontes:** `ingestion/sources/klaviyo_flow_metrics.py`
 - **Cron:** `0 7 * * *` — todo dia às 04:00 BRT (07:00 UTC)
 - **Lookback:** D-2 a D-1 (recupera automaticamente se falhou no dia anterior)
-- **maxDuration:** 800s (configurado em `vercel.json`)
+- **maxDuration:** 900s (atualizado de 800s)
+- **Depende de:** cron `email_structure` ter rodado antes para popular `dim_asset_items`
 - **Estado:** ✅ ativo
 
 #### ingestion-email-campaign
@@ -71,7 +81,7 @@ O resultado: dados de Shopify, Klaviyo e GA4 aparecem unificados num único pain
 #### backfill-admin
 - **Responsabilidade:** Permitir recuperação manual de dados perdidos via browser
 - **Entry point:** `api/cron/app.py` rota `/admin/backfill/<job>`
-- **Jobs disponíveis:** `email_flow`, `email_campaign`, `sessions`, `forms`, `revenue`
+- **Jobs disponíveis:** `email_structure`, `email_flow`, `email_campaign`, `sessions`, `forms`, `revenue`
 - **Parâmetros:** `?since=YYYY-MM-DD`, `?until=YYYY-MM-DD`
 - **Exemplo:** `https://gerenciadorcrm.vercel.app/admin/backfill/email_flow?since=2026-06-02`
 - **Estado:** ✅ ativo (acessível enquanto AUTH_ENABLED=False)
@@ -100,21 +110,22 @@ O resultado: dados de Shopify, Klaviyo e GA4 aparecem unificados num único pain
 ### Diagrama (ASCII)
 
 ```
-[Shopify API]    ──→ [Cron: revenue, a cada 35min]       ──┐
-[Google Sheets]  ──→ [Cron: sessions, a cada 1h]         ──┤
-[Klaviyo API]    ──→ [Cron: email_flow, 04:00 BRT]       ──┤→ [Supabase PostgreSQL]
-                 ──→ [Cron: email_campaign, 00:30 BRT]   ──┤    │
-                 ──→ [Cron: forms, 06:00 BRT]            ──┘    │ [views vw_*]
-                                                                  │ [tabelas diretas]
-[Input manual]   ──────────────────────────────────────────→ [fact_monthly_goals]
-[Admin backfill] ──→ [/admin/backfill/<job>]             ──→     │
-                                                                  ↓
-                                                        [api/cron/app.py Flask]
-                                                        (auth JWT Supabase — temp. desativado)
-                                                                  │
-                                                                  ↓
-                                                        [dashboard-crm.html]
-                                                        (supabase-js lê views e tabelas)
+[Shopify API]    ──→ [Cron: revenue, a cada 35min]           ──┐
+[Google Sheets]  ──→ [Cron: sessions, a cada 1h]             ──┤
+[Klaviyo API]    ──→ [Cron: email_structure, 03:00 BRT] ──→ dim_assets/dim_asset_items
+                 ──→ [Cron: email_flow, 04:00 BRT] (lê ↑ do banco) ──┤→ [Supabase PostgreSQL]
+                 ──→ [Cron: email_campaign, 00:30 BRT]       ──┤    │
+                 ──→ [Cron: forms, 06:00 BRT]                ──┘    │ [views vw_*]
+                                                                      │ [tabelas diretas]
+[Input manual]   ──────────────────────────────────────────────→ [fact_monthly_goals]
+[Admin backfill] ──→ [/admin/backfill/<job>]                 ──→     │
+                                                                      ↓
+                                                            [api/cron/app.py Flask]
+                                                            (auth JWT Supabase — temp. desativado)
+                                                                      │
+                                                                      ↓
+                                                            [dashboard-crm.html]
+                                                            (supabase-js lê views e tabelas)
 ```
 
 ---
@@ -388,13 +399,21 @@ Registro de execuções dos cron jobs — usado pelo banner de alertas no dashbo
 
 ---
 
-### Fluxo 3 — Cron de e-mail fluxo (Klaviyo, diário às 04h BRT)
+### Fluxo 3a — Cron de estrutura de fluxos (Klaviyo, diário às 03h BRT)
+
+1. **Trigger:** Vercel Cron → `GET /api/cron/email_structure`
+2. **Executa:** `run_structure_sync()` — busca fluxos ativos e seus e-mails individuais
+3. **Processo:** lista fluxos `status=live` → para cada fluxo, busca flow-actions → flow-messages
+4. **Grava:** upsert em `dim_assets` (fluxos) e `dim_asset_items` (e-mails) por `external_id`
+5. **Duração:** ~8-10 minutos — maxDuration: 600s
+
+### Fluxo 3b — Cron de e-mail fluxo (Klaviyo, diário às 04h BRT)
 
 1. **Trigger:** Vercel Cron → `GET /api/cron/email_flow`
 2. **Executa:** `run_yesterday()` — busca D-2 a D-1
-3. **Processo:** lista todos os fluxos ativos → para cada fluxo, busca flow-messages → para cada mensagem × 3 métricas, chama `metric-aggregates` API (0,3s de throttle)
+3. **Processo:** lê estrutura de `dim_assets` + `dim_asset_items` (zero chamadas GET ao Klaviyo) → para cada mensagem × 3 métricas, chama `metric-aggregates` API (0,3s de throttle)
 4. **Grava:** upsert em `flow_email_metrics` por `(message_id, data)`
-5. **Duração:** ~5-10 minutos (300+ chamadas à API) — maxDuration: 800s
+5. **Duração:** ~8-10 minutos (~1.566 chamadas POST) — maxDuration: 900s
 
 ---
 
@@ -449,6 +468,7 @@ Registro de execuções dos cron jobs — usado pelo banner de alertas no dashbo
 | 2026-06-01 | `flow_email_metrics` separada de `fact_email_sends` | Granularidade de flow-message × dia; evita mistura com campanhas | Unificação futura exige migration |
 | 2026-06-03 | Dashboard consulta `vw_flow_email_assets` e `vw_flow_email_items` (views) em vez de `flow_email_metrics` direto | Queries diretas à tabela via supabase-js retornavam array vazio no browser; views (security definer) contornam o problema. Segue R11. | Queries diretas a `flow_email_metrics` via anon key são instáveis — sempre usar view |
 | 2026-06-03 | Crons com lookback D-2 a D-1 | Auto-recuperação: se cron falhar um dia, a próxima execução recupera automaticamente | — |
+| 2026-06-05 | Estrutura de fluxos cacheada em `dim_assets`/`dim_asset_items` via cron separado | Eliminação de ~500 chamadas GET/dia que causavam 429s e timeout no cron email_flow | Novas métricas de fluxo exigem atualização do cron email_structure |
 | 2026-06-03 | Endpoint `/admin/backfill/<job>` para recuperação manual | Permite backfill via browser sem precisar de CRON_SECRET ou CLI | Requer AUTH_ENABLED=True para segurança em produção |
 
 ---
@@ -461,9 +481,9 @@ Registro de execuções dos cron jobs — usado pelo banner de alertas no dashbo
 - **Plano:** aceitar na V1; migrar para BigQuery API direto na V2
 
 ### Cron de e-mail fluxo — volume de chamadas API
-- **Risco:** 34 fluxos × ~10 mensagens × 3 métricas = ~1.000 chamadas/dia à Klaviyo. Se novos fluxos forem criados, o tempo de execução aumenta
-- **Sinal de falha:** ausência de log em `cron_logs` para `email_flow`
-- **Plano:** monitorar. Se ultrapassar 600s, implementar cache de `flow_id`/`message_id` no banco para evitar re-busca a cada execução
+- **Risco:** 31 fluxos × ~17 mensagens × 3 métricas = ~1.566 chamadas POST/dia. Se novos fluxos forem criados, o tempo de execução aumenta
+- **Sinal de falha:** ausência de log em `cron_logs` para `email_flow`; ou `email_flow` logando "no_flow_messages_in_db" (indica que `email_structure` falhou)
+- **Mitigação aplicada (2026-06-05):** estrutura de fluxos cacheada em `dim_assets`/`dim_asset_items` pelo cron `email_structure` — elimina ~500 chamadas GET por execução
 
 ### AUTH_ENABLED=False temporariamente
 - **Risco:** dashboard e endpoint `/admin/backfill/*` acessíveis publicamente
@@ -484,17 +504,20 @@ Registro de execuções dos cron jobs — usado pelo banner de alertas no dashbo
 | Caminho | Responsabilidade | Quem deve mexer |
 |---|---|---|
 | `dashboard-crm.html` | Dashboard visual — fonte única de verdade do frontend | Apenas substituição de dados/lógica; HTML/CSS estrutural intocável |
-| `api/cron/app.py` | Flask: serve dashboard + auth + 5 endpoints de cron + admin backfill | Claude ao adicionar rota ou cron |
-| `api/cron/email_flow.py` | Entry point do cron email_flow (maxDuration: 800s) | Claude ao ajustar janela ou throttle |
+| `api/cron/app.py` | Flask: serve dashboard + auth + 6 endpoints de cron + admin backfill | Claude ao adicionar rota ou cron |
+| `api/cron/email_structure.py` | Entry point do cron email_structure (maxDuration: 600s) | Claude ao ajustar throttle |
+| `api/cron/email_flow.py` | Entry point do cron email_flow (maxDuration: 900s) | Claude ao ajustar janela ou throttle |
 | `api/cron/email_campaign.py` | Entry point do cron email_campaign | Claude ao ajustar janela |
 | `api/cron/revenue.py` | Entry point do cron de receita Shopify | — |
 | `api/cron/sessions.py` | Entry point do cron de sessões | — |
 | `api/cron/forms.py` | Entry point do cron de formulários | — |
 | `ingestion/db/writers.py` | Todas as funções de upsert no Supabase | Claude com cuidado — afeta todas as fontes |
-| `ingestion/flow_metrics_daily.py` | Runner do email_flow + função `run_for_flow` | Claude ao ajustar lookback ou throttle |
+| `ingestion/flow_metrics_daily.py` | Runner do email_flow — lê estrutura do banco via `get_flow_message_structure` | Claude ao ajustar lookback ou throttle |
+| `ingestion/flow_structure_daily.py` | Runner do email_structure — sincroniza dim_assets/dim_asset_items | Claude ao ajustar throttle |
 | `ingestion/campaign_metrics_daily.py` | Runner do email_campaign | Claude ao ajustar lookback |
 | `ingestion/main.py` | Entry points: shopify, sessions, forms | Claude ao ajustar janelas |
-| `ingestion/sources/klaviyo_flow_metrics.py` | Lógica de busca de métricas de fluxo via Klaviyo API | Claude com cuidado — throttle sensível |
+| `ingestion/sources/klaviyo_flow_metrics.py` | Lógica de busca de métricas via Klaviyo metric-aggregates API — lê estrutura do banco | Claude com cuidado — throttle sensível |
+| `ingestion/sources/klaviyo_structure_sync.py` | Lógica de sincronização de estrutura de fluxos (dim_assets + dim_asset_items) | Claude ao ajustar throttle |
 | `supabase/migrations/` | Schema do banco versionado | NUNCA editar migration já aplicada — sempre criar nova |
 | `vercel.json` | Crons, routing, maxDuration | Claude ao adicionar cron ou ajustar timeout |
 | `.env` | Credenciais reais | Apenas Daniel — Claude nunca lê nem commita |
