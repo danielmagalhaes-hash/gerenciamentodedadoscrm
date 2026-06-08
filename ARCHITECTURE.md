@@ -1,7 +1,7 @@
 # ARCHITECTURE.md — Dashboard CRM · Minimal Club
 
 > Mapa vivo do sistema. Lido em TODA sessão. Atualizado ao FIM de toda sessão.
-> Última atualização: 2026-06-05
+> Última atualização: 2026-06-08
 
 ---
 
@@ -53,6 +53,7 @@ O resultado: dados de Shopify, Klaviyo e GA4 aparecem unificados num único pain
 - **Cron:** `0 7 * * *` — todo dia às 04:00 BRT (07:00 UTC)
 - **Lookback:** D-2 a D-1 (recupera automaticamente se falhou no dia anterior)
 - **maxDuration:** 900s (atualizado de 800s)
+- **Estratégia de chamadas:** por fluxo × 3 métricas com `by=['$message']` — ~99 POSTs por execução (~75s). Versão anterior fazia 1 POST por mensagem × 3 métricas (~1.566 chamadas, causava timeout)
 - **Depende de:** cron `email_structure` ter rodado antes para popular `dim_asset_items`
 - **Estado:** ✅ ativo
 
@@ -411,9 +412,9 @@ Registro de execuções dos cron jobs — usado pelo banner de alertas no dashbo
 
 1. **Trigger:** Vercel Cron → `GET /api/cron/email_flow`
 2. **Executa:** `run_yesterday()` — busca D-2 a D-1
-3. **Processo:** lê estrutura de `dim_assets` + `dim_asset_items` (zero chamadas GET ao Klaviyo) → para cada mensagem × 3 métricas, chama `metric-aggregates` API (0,3s de throttle)
+3. **Processo:** lê estrutura de `dim_assets` + `dim_asset_items` (zero chamadas GET ao Klaviyo) → agrupa mensagens por fluxo → para cada fluxo × 3 métricas, chama `metric-aggregates` com `by=['$message']` recebendo breakdown de todas as mensagens numa chamada
 4. **Grava:** upsert em `flow_email_metrics` por `(message_id, data)`
-5. **Duração:** ~8-10 minutos (~1.566 chamadas POST) — maxDuration: 900s
+5. **Duração:** ~75s (~99 chamadas POST) — maxDuration: 900s
 
 ---
 
@@ -469,6 +470,7 @@ Registro de execuções dos cron jobs — usado pelo banner de alertas no dashbo
 | 2026-06-03 | Dashboard consulta `vw_flow_email_assets` e `vw_flow_email_items` (views) em vez de `flow_email_metrics` direto | Queries diretas à tabela via supabase-js retornavam array vazio no browser; views (security definer) contornam o problema. Segue R11. | Queries diretas a `flow_email_metrics` via anon key são instáveis — sempre usar view |
 | 2026-06-03 | Crons com lookback D-2 a D-1 | Auto-recuperação: se cron falhar um dia, a próxima execução recupera automaticamente | — |
 | 2026-06-05 | Estrutura de fluxos cacheada em `dim_assets`/`dim_asset_items` via cron separado | Eliminação de ~500 chamadas GET/dia que causavam 429s e timeout no cron email_flow | Novas métricas de fluxo exigem atualização do cron email_structure |
+| 2026-06-08 | email_flow usa `by=['$message']` por fluxo (não por mensagem) | Reduz ~1.566 para ~99 POSTs; execução de ~15min para ~75s; resolve timeout Vercel | — |
 | 2026-06-03 | Endpoint `/admin/backfill/<job>` para recuperação manual | Permite backfill via browser sem precisar de CRON_SECRET ou CLI | Requer AUTH_ENABLED=True para segurança em produção |
 
 ---
@@ -481,9 +483,15 @@ Registro de execuções dos cron jobs — usado pelo banner de alertas no dashbo
 - **Plano:** aceitar na V1; migrar para BigQuery API direto na V2
 
 ### Cron de e-mail fluxo — volume de chamadas API
-- **Risco:** 31 fluxos × ~17 mensagens × 3 métricas = ~1.566 chamadas POST/dia. Se novos fluxos forem criados, o tempo de execução aumenta
-- **Sinal de falha:** ausência de log em `cron_logs` para `email_flow`; ou `email_flow` logando "no_flow_messages_in_db" (indica que `email_structure` falhou)
-- **Mitigação aplicada (2026-06-05):** estrutura de fluxos cacheada em `dim_assets`/`dim_asset_items` pelo cron `email_structure` — elimina ~500 chamadas GET por execução
+- **Risco:** se novos fluxos forem criados, o número de chamadas POST aumenta proporcionalmente (~3 por fluxo)
+- **Sinal de falha:** ausência de log em `cron_logs` para `email_flow`; ou `email_flow` logando "no_flow_messages_in_db" (indica que `email_structure` falhou antes)
+- **Mitigação aplicada (2026-06-05):** estrutura cacheada em `dim_assets`/`dim_asset_items` — elimina ~500 chamadas GET por execução
+- **Mitigação aplicada (2026-06-08):** por fluxo com `by=['$message']` — reduz de ~1.566 para ~99 POSTs; execução caiu de ~15min para ~75s; resolve o timeout que causou falhas desde 05/06
+
+### Cron de estrutura de fluxos — risco de timeout na Vercel
+- **Risco:** localmenteo cron email_structure levou ~499s (dentro do limite de 600s), mas com mais 429s pode ultrapassar
+- **Sinal de falha:** `email_flow` logando "no_flow_messages_in_db" mesmo com `email_structure` aparentemente executando
+- **Monitoramento:** verificar duração real nos logs da Vercel se os 429s se tornarem mais frequentes
 
 ### AUTH_ENABLED=False temporariamente
 - **Risco:** dashboard e endpoint `/admin/backfill/*` acessíveis publicamente
