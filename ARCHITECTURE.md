@@ -100,13 +100,18 @@ O resultado: dados de Shopify, Klaviyo e GA4 aparecem unificados num único pain
 
 ### Módulos planejados (Fase 2)
 
+#### ingestion-community (implementado — aguardando chave API válida)
+- **Responsabilidade:** Buscar releases, analytics e ações de disparo do Sendflow → `dim_assets`, `fact_community_actions`, `fact_community_analytics`
+- **Entry point:** `api/cron/community.py` → `ingestion/community_daily.py:run_yesterday()`
+- **Fontes:** `ingestion/sources/sendflow.py`, `ingestion/models/sendflow_models.py`
+- **Cron:** `0 8 * * *` — todo dia às 05:00 BRT (08:00 UTC)
+- **Backfill:** `/admin/backfill/community?since=2026-01-01` ou `python -m ingestion.community_daily --since 2026-01-01`
+- **Bloqueio:** `SENDFLOW_API_KEY` no `.env` retorna 401 — verificar chave no painel do Sendflow
+- **Estado:** ⏳ aguardando chave API válida
+
 #### ingestion-vekta (não iniciado)
 - **Responsabilidade:** Buscar métricas de WhatsApp Fluxo e Campanha → `fact_wpp_sends`
 - **Bloqueio:** confirmar se Vekta tem API pública
-
-#### ingestion-sendflow (não iniciado)
-- **Responsabilidade:** Buscar dados da Comunidade WhatsApp → `fact_community_members`, `fact_community_sends`
-- **Bloqueio:** confirmar acesso à API Sendflow
 
 ### Diagrama (ASCII)
 
@@ -334,14 +339,49 @@ Registro de execuções dos cron jobs — usado pelo banner de alertas no dashbo
 
 ---
 
+### Tabelas de comunidade (criadas — aguardando dados)
+
+#### fact_community_actions
+Ações de disparo da comunidade (sendMessages) — uma linha por ação no Sendflow.
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| action_id | text | ID da ação no Sendflow — UNIQUE |
+| release_id | text | ID da release (campanha) no Sendflow |
+| asset_id | uuid | FK → dim_assets |
+| channel_id | uuid | FK → dim_channels (wpp_community) |
+| action_date | date | Data da ação (de createdAt) |
+| action_type | text | 'sendMessages' etc. |
+| success | boolean | — |
+| scheduled_to | timestamptz | — |
+| finished_at | timestamptz | — |
+| ingested_at | timestamptz | — |
+
+#### fact_community_analytics
+Analytics de crescimento por release por dia — entradas, saídas e cliques.
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| date | date | — |
+| release_id | text | — |
+| asset_id | uuid | FK → dim_assets |
+| channel_id | uuid | FK → dim_channels (wpp_community) |
+| members_added | integer | Entradas no dia |
+| members_removed | integer | Saídas no dia |
+| link_clicks | integer | Cliques no link de entrada |
+| total_members | integer | Snapshot atual (só data mais recente) |
+| ingested_at | timestamptz | — |
+
+- **Chave única:** `(date, release_id)`
+
 ### Tabelas para fases futuras (vazias)
 
 | Tabela | Fase | Aguarda |
 |---|---|---|
 | `fact_wpp_sends` | 2 | Integração Vekta |
 | `fact_wpp_subscribers` | 2 | Integração Vekta |
-| `fact_community_members` | 2 | Integração Sendflow |
-| `fact_community_sends` | 2 | Integração Sendflow |
 | `fact_monthly_goals` | 2 | Input manual das metas (estrutura pronta, dashboard tem placeholder) |
 | `dim_utm_mappings` | 3 | Classificação manual de UTMs não reconhecidas |
 | `flow_utm_pending` | 3 | Processamento de UTMs pendentes (dashboard já escreve, nada processa) |
@@ -368,6 +408,7 @@ Registro de execuções dos cron jobs — usado pelo banner de alertas no dashbo
 |---|---|---|
 | `vw_email_health` | Saúde da base (entregabilidade, base ativa) | Quando substituir o mock de saúde da base no Resumo CRM |
 | `vw_pace_vs_goals` | % atingido, projeção de fechamento vs meta | Quando `fact_monthly_goals` for preenchida |
+| `vw_community_daily` | Disparos, membros, cliques, receita, Receita/Disparo por dia | Quando backfill do Sendflow for executado com chave válida |
 
 ### Funções do banco
 

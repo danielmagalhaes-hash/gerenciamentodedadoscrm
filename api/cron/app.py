@@ -269,7 +269,7 @@ def admin_backfill(job: str):
       /admin/backfill/forms
       /admin/backfill/revenue
     """
-    VALID = {'email_flow', 'email_campaign', 'email_structure', 'sessions', 'forms', 'revenue'}
+    VALID = {'email_flow', 'email_campaign', 'email_structure', 'sessions', 'forms', 'revenue', 'community'}
     if job not in VALID:
         return jsonify({'error': f'Job inválido. Use: {sorted(VALID)}'}), 400
 
@@ -302,6 +302,12 @@ def admin_backfill(job: str):
         elif job == 'revenue':
             from ingestion.main import run_smart_shopify_ingestion
             run_smart_shopify_ingestion()
+        elif job == 'community':
+            from ingestion.community_daily import run_for_period, run_yesterday
+            if since_str:
+                run_for_period(_date.fromisoformat(since_str), _date.fromisoformat(until_str))
+            else:
+                run_yesterday()
 
         from ingestion.alert import log_cron
         log_cron(job, 'ok')
@@ -327,4 +333,21 @@ def forms():
         logger.error({'event': 'cron_failed', 'job': 'forms', 'error': str(e)})
         from ingestion.alert import send_failure_alert
         send_failure_alert('forms', str(e))
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/cron/community', methods=['GET'])
+def community():
+    if not _authorized():
+        return jsonify({'error': 'unauthorized'}), 401
+    try:
+        from ingestion.community_daily import run_yesterday
+        run_yesterday()
+        from ingestion.alert import log_cron
+        log_cron('community', 'ok')
+        return jsonify({'status': 'ok', 'job': 'community'})
+    except Exception as e:
+        logger.error({'event': 'cron_failed', 'job': 'community', 'error': str(e)})
+        from ingestion.alert import send_failure_alert
+        send_failure_alert('community', str(e))
         return jsonify({'error': str(e)}), 500

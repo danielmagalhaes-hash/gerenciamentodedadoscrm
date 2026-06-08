@@ -11,7 +11,8 @@
     { "path": "/api/cron/email_structure",  "schedule": "0 6 * * *"    },
     { "path": "/api/cron/email_flow",       "schedule": "0 7 * * *"    },
     { "path": "/api/cron/email_campaign",   "schedule": "30 3 * * *"   },
-    { "path": "/api/cron/forms",            "schedule": "0 9 * * *"    }
+    { "path": "/api/cron/forms",            "schedule": "0 9 * * *"    },
+    { "path": "/api/cron/community",        "schedule": "0 8 * * *"    }
   ],
   "functions": {
     "api/cron/email_structure.py": { "maxDuration": 600 },

@@ -3,6 +3,11 @@ from datetime import date, datetime, timezone
 
 from supabase import Client
 
+from ingestion.models.sendflow_models import (
+    SendflowAction,
+    SendflowAnalytics,
+    SendflowRelease,
+)
 from ingestion.models.klaviyo_models import (
     KlaviyoCampaign,
     KlaviyoCampaignEmailMetric,
@@ -582,6 +587,135 @@ def get_flow_message_structure(sb: Client) -> list[dict]:
 
     logger.info({"event": "flow_structure_loaded_from_db", "messages": len(messages)})
     return messages
+
+
+def get_sendflow_asset_map(sb: Client) -> dict[str, str]:
+    """Retorna {external_id: uuid} de todos os ativos Sendflow em dim_assets."""
+    resp = (
+        sb.table("dim_assets")
+        .select("id,external_id")
+        .eq("source_tool", "sendflow")
+        .limit(10000)
+        .execute()
+    )
+    return {row["external_id"]: row["id"] for row in resp.data}
+
+
+def upsert_community_assets(
+    sb: Client, releases: list[SendflowRelease], channel_ids: dict[str, str]
+) -> int:
+    """Sincroniza releases do Sendflow como ativos em dim_assets (source_tool='sendflow')."""
+    if not releases:
+        return 0
+    now = _now_iso()
+    channel_id = channel_ids["wpp_community"]
+    records = [{
+        "external_id": r.id,
+        "channel_id": channel_id,
+        "name": r.name,
+        "type": "campaign",
+        "is_active": not r.archived,
+        "source_tool": "sendflow",
+        "updated_at": now,
+        "ingested_at": now,
+    } for r in releases]
+    sb.table("dim_assets").upsert(records, on_conflict="external_id,source_tool").execute()
+    logger.info({"event": "community_assets_upserted", "count": len(records)})
+    return len(records)
+
+
+def upsert_community_analytics(
+    sb: Client,
+    release_id: str,
+    asset_id: str | None,
+    channel_id: str,
+    analytics: SendflowAnalytics,
+    total_members: int | None,
+    since: date | None = None,
+    until: date | None = None,
+) -> int:
+    """Grava métricas de crescimento e engajamento por dia por release.
+
+    Combina as três métricas (add/remove/clicks) num único upsert por data.
+    Se since/until informados, filtra apenas as datas nesse intervalo.
+    total_members é gravado apenas na data mais recente do lote (snapshot atual).
+    """
+    all_dates: set[str] = set()
+    all_dates.update(analytics.add.dates.keys())
+    all_dates.update(analytics.remove.dates.keys())
+    all_dates.update(analytics.clicks.dates.keys())
+
+    if not all_dates:
+        return 0
+
+    if since or until:
+        all_dates = {
+            d for d in all_dates
+            if (not since or d >= since.isoformat())
+            and (not until or d <= until.isoformat())
+        }
+
+    if not all_dates:
+        return 0
+
+    most_recent = max(all_dates)
+    now = _now_iso()
+    records = []
+    for date_str in all_dates:
+        records.append({
+            "date": date_str,
+            "release_id": release_id,
+            "asset_id": asset_id,
+            "channel_id": channel_id,
+            "members_added": analytics.add.dates.get(date_str, 0),
+            "members_removed": analytics.remove.dates.get(date_str, 0),
+            "link_clicks": analytics.clicks.dates.get(date_str, 0),
+            "total_members": total_members if date_str == most_recent else None,
+            "ingested_at": now,
+        })
+
+    batch_size = 500
+    total = 0
+    for i in range(0, len(records), batch_size):
+        batch = records[i : i + batch_size]
+        sb.table("fact_community_analytics").upsert(
+            batch, on_conflict="date,release_id"
+        ).execute()
+        total += len(batch)
+
+    logger.info({
+        "event": "community_analytics_upserted",
+        "release_id": release_id,
+        "count": total,
+    })
+    return total
+
+
+def upsert_community_actions(
+    sb: Client,
+    actions: list[SendflowAction],
+    asset_map: dict[str, str],
+    channel_id: str,
+) -> int:
+    """Grava ações de disparo da comunidade em fact_community_actions."""
+    if not actions:
+        return 0
+    now = _now_iso()
+    records = [{
+        "action_id":    a.id,
+        "release_id":   a.release_id,
+        "asset_id":     asset_map.get(a.release_id),
+        "channel_id":   channel_id,
+        "action_date":  a.created_at.date().isoformat(),
+        "action_type":  a.type,
+        "success":      a.success,
+        "scheduled_to": a.scheduled_to.isoformat() if a.scheduled_to else None,
+        "finished_at":  a.finished_at.isoformat() if a.finished_at else None,
+        "ingested_at":  now,
+    } for a in actions]
+    sb.table("fact_community_actions").upsert(records, on_conflict="action_id").execute()
+    logger.info({"event": "community_actions_upserted", "count": len(records)})
+    return len(records)
 
 
 def upsert_sessions_utm(sb: Client, rows: list[SessionUtmRow], channel_ids: dict[str, str]) -> int:
