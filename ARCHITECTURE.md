@@ -1,7 +1,7 @@
 # ARCHITECTURE.md — Dashboard CRM · Minimal Club
 
 > Mapa vivo do sistema. Lido em TODA sessão. Atualizado ao FIM de toda sessão.
-> Última atualização: 2026-06-08
+> Última atualização: 2026-06-09
 
 ---
 
@@ -52,9 +52,10 @@ O resultado: dados de Shopify, Klaviyo e GA4 aparecem unificados num único pain
 - **Fontes:** `ingestion/sources/klaviyo_flow_metrics.py`
 - **Cron:** `0 7 * * *` — todo dia às 04:00 BRT (07:00 UTC)
 - **Lookback:** D-2 a D-1 (recupera automaticamente se falhou no dia anterior)
-- **maxDuration:** 900s (atualizado de 800s)
+- **maxDuration:** 800s (reduzido de 900s em 2026-06-09 — limite do plano Vercel; email_flow roda em ~75s, folga suficiente)
 - **Estratégia de chamadas:** por fluxo × 3 métricas com `by=['$message']` — ~99 POSTs por execução (~75s). Versão anterior fazia 1 POST por mensagem × 3 métricas (~1.566 chamadas, causava timeout)
 - **Depende de:** cron `email_structure` ter rodado antes para popular `dim_asset_items`
+- **Fallback manual:** botão "↻ Atualizar D-1" na aba E-mail Fluxo do dashboard chama `/admin/backfill/email_flow?since=D-1&until=D-1` — substitui o cron quando há rate limit
 - **Estado:** ✅ ativo
 
 #### ingestion-email-campaign
@@ -75,8 +76,10 @@ O resultado: dados de Shopify, Klaviyo e GA4 aparecem unificados num único pain
 
 #### vercel-crons
 - **Responsabilidade:** Orquestrar e executar todos os crons automaticamente
-- **Configuração:** `vercel.json` — 5 crons + routing + maxDuration
+- **Configuração:** `vercel.json` — 7 crons + routing + maxDuration + includeFiles
 - **Projeto Vercel:** `gerenciamentodedadoscrmoficial` → `gerenciadorcrm.vercel.app`
+- **Deploy:** obrigatório via `vercel --prod` (CLI) — auto-deploy do GitHub não está ativo; push no GitHub não atualiza produção sozinho
+- **includeFiles:** `dashboard-crm.html` explicitamente incluído no bundle de `api/cron/app.py` — sem isso o Flask servia versão antiga cacheada
 - **Estado:** ✅ ativo
 
 #### backfill-admin
@@ -87,6 +90,14 @@ O resultado: dados de Shopify, Klaviyo e GA4 aparecem unificados num único pain
 - **Exemplo:** `https://gerenciadorcrm.vercel.app/admin/backfill/email_flow?since=2026-06-02`
 - **Estado:** ✅ ativo (acessível enquanto AUTH_ENABLED=False)
 
+#### utm-config-admin
+- **Responsabilidade:** Gravar ou atualizar `utm_campaign` de um fluxo diretamente em `flow_utm_config`
+- **Entry point:** `api/cron/app.py` rota `POST /admin/utm-config`
+- **Body:** `{ "flow_name": "...", "utm_campaign": "..." }`
+- **Escrita:** upsert via `service_role_key` — segue R3
+- **Chamado por:** botão "Salvar" no formulário de UTM da aba E-mail Fluxo do dashboard
+- **Estado:** ✅ ativo
+
 #### supabase-schema
 - **Responsabilidade:** Definir e versionar schema do banco via migrations SQL
 - **Localização:** `supabase/migrations/` — 32 migrations aplicadas
@@ -96,6 +107,8 @@ O resultado: dados de Shopify, Klaviyo e GA4 aparecem unificados num único pain
 - **Responsabilidade:** Renderizar dados do Supabase no dashboard HTML
 - **Arquivo:** `dashboard-crm.html`
 - **Lê:** views `vw_*` exclusivamente — incluindo `vw_flow_email_assets` e `vw_flow_email_items` para E-mail Fluxo, `fact_orders` para receita por fluxo
+- **Botão "↻ Atualizar D-1":** presente na aba E-mail Fluxo; chama `/admin/backfill/email_flow` com a data de ontem e re-renderiza a aba após ~75s
+- **Formulário de UTM:** na aba E-mail Fluxo, exibe cada fluxo sem `utm_campaign` como linha com input + botão Salvar; salva via `POST /admin/utm-config`; e-mails sem `[LEADS]/[CLIENTES]` aparecem em seção informativa separada
 - **Estado:** ✅ ativo
 
 ### Módulos planejados (Fase 2)
@@ -513,6 +526,11 @@ Analytics de crescimento por release por dia — entradas, saídas e cliques.
 | 2026-06-05 | Estrutura de fluxos cacheada em `dim_assets`/`dim_asset_items` via cron separado | Eliminação de ~500 chamadas GET/dia que causavam 429s e timeout no cron email_flow | Novas métricas de fluxo exigem atualização do cron email_structure |
 | 2026-06-08 | email_flow usa `by=['$message']` por fluxo (não por mensagem) | Reduz ~1.566 para ~99 POSTs; execução de ~15min para ~75s; resolve timeout Vercel | — |
 | 2026-06-03 | Endpoint `/admin/backfill/<job>` para recuperação manual | Permite backfill via browser sem precisar de CRON_SECRET ou CLI | Requer AUTH_ENABLED=True para segurança em produção |
+| 2026-06-09 | maxDuration do email_flow reduzido de 900 para 800s | 900s excedia o limite do plano Vercel e bloqueava todos os deploys; email_flow roda em ~75s, folga suficiente | — |
+| 2026-06-09 | Deploy obrigatório via `vercel --prod` | Auto-deploy do GitHub não está configurado no projeto; push no GitHub não atualiza produção | Configurar GitHub Integration no painel Vercel para eliminar passo manual |
+| 2026-06-09 | `includeFiles: dashboard-crm.html` em `vercel.json` | Sem isso, Vercel servia versão cacheada do HTML mesmo após deploy com código novo | Qualquer novo arquivo lido em runtime por Flask precisa de entrada em includeFiles |
+| 2026-06-09 | Botão manual "↻ Atualizar D-1" no dashboard (E-mail Fluxo) | Cron email_flow continua recebendo rate limit do Klaviyo; botão permite atualização sob demanda sem depender do cron | — |
+| 2026-06-09 | Configuração de UTM via formulário estruturado no dashboard | Substituiu textarea freeform + dependência de sessão com Claude; grava direto em `flow_utm_config` via `POST /admin/utm-config` com service_role_key | — |
 
 ---
 
