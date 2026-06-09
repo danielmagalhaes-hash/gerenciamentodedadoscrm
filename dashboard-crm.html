@@ -1625,7 +1625,10 @@ function channelHTML(key){
   const cfg = CFG[key];
   const isCommunity = key==='co';
   return `
-    <div class="section-title">${ch.name} · KPIs do canal</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:24px 0 10px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px">${ch.name} · KPIs do canal</div>
+      ${key==='ef'?`<div style="display:flex;align-items:center;gap:8px"><span id="ef-refresh-status" style="font-size:11px;color:var(--muted)"></span><button class="btn btn-ghost btn-sm" id="btn-refresh-ef" onclick="triggerEmailFlowRefresh()">↻ Atualizar D-1</button></div>`:''}
+    </div>
     <div class="grid grid-6" id="kpi-${key}"></div>
 
     <div class="section-title">Funil completo do site · atribuído a ${ch.name}</div>
@@ -1680,6 +1683,31 @@ function channelHTML(key){
       </div>
     </div>
   `;
+}
+
+async function triggerEmailFlowRefresh() {
+  const btn = document.getElementById('btn-refresh-ef');
+  const status = document.getElementById('ef-refresh-status');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '⏳ Atualizando...';
+  if (status) { status.textContent = 'Isso pode levar até 2 minutos...'; status.style.color = 'var(--muted)'; }
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const ymd = yesterday.toISOString().slice(0, 10);
+
+  try {
+    const resp = await fetch(`/admin/backfill/email_flow?since=${ymd}&until=${ymd}`);
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(json.error || resp.statusText);
+    await renderChannel('ef');
+  } catch (err) {
+    const b = document.getElementById('btn-refresh-ef');
+    const s = document.getElementById('ef-refresh-status');
+    if (b) { b.disabled = false; b.textContent = '↻ Atualizar D-1'; }
+    if (s) { s.textContent = `Erro: ${err.message}`; s.style.color = 'var(--danger)'; }
+  }
 }
 
 async function renderChannel(key){
