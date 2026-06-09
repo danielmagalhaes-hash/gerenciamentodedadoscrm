@@ -17,6 +17,6 @@
   "functions": {
     "api/cron/email_structure.py": { "maxDuration": 600 },
     "api/cron/email_flow.py":      { "maxDuration": 900 },
-    "api/cron/app.py":             { "maxDuration": 800 }
+    "api/cron/app.py":             { "maxDuration": 800, "includeFiles": "dashboard-crm.html" }
   }
 }
