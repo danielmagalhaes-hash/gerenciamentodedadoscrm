@@ -319,6 +319,32 @@ def admin_backfill(job: str):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/admin/utm-config', methods=['POST'])
+def admin_utm_config():
+    """Grava ou atualiza utm_campaign de um fluxo em flow_utm_config.
+    Body JSON: { "flow_name": "...", "utm_campaign": "..." }
+    """
+    data = request.get_json() or {}
+    flow_name    = (data.get('flow_name', '') or '').strip()
+    utm_campaign = (data.get('utm_campaign', '') or '').strip()
+    if not flow_name or not utm_campaign:
+        return jsonify({'error': 'flow_name e utm_campaign são obrigatórios'}), 400
+    try:
+        from supabase import create_client as _sb_admin
+        sb = _sb_admin(
+            os.environ['SUPABASE_URL'],
+            os.environ['SUPABASE_SERVICE_ROLE_KEY'],
+        )
+        sb.table('flow_utm_config').upsert(
+            {'flow_name': flow_name, 'utm_campaign': utm_campaign},
+            on_conflict='flow_name',
+        ).execute()
+        return jsonify({'status': 'ok', 'flow_name': flow_name, 'utm_campaign': utm_campaign})
+    except Exception as e:
+        logger.error({'event': 'utm_config_failed', 'flow_name': flow_name, 'error': str(e)})
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/cron/forms', methods=['GET'])
 def forms():
     if not _authorized():

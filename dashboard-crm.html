@@ -2171,77 +2171,110 @@ function heatColor(val,min,max){
 }
 
 // =========================================
-// ALERTA DE UTMs PENDENTES — E-mail Fluxo
+// CONFIGURAÇÃO DE UTM — E-mail Fluxo
 // =========================================
 async function renderFlowUtmAlert(flowRows, itemRows) {
-  // Injeta o card diretamente no page-ef, após a tabela de ativos
   const page = document.getElementById('page-ef');
   if (!page) return;
 
-  // Remove alerta anterior se existir
   const old = page.querySelector('#flow-utm-alert');
   if (old) old.remove();
 
-  // Fluxos sem UTM: utm_campaign nulo ou vazio
-  const flowsSemUtm = [...new Set(
-    flowRows.filter(r => !r.utm_campaign).map(r => r.asset_name)
-  )];
+  // Fluxos sem utm_campaign configurado
+  const flowsSemUtm = [...new Map(
+    flowRows.filter(r => !r.utm_campaign).map(r => [r.asset_name, r])
+  ).values()];
 
-  // E-mails cujo fluxo tem UTM mas o nome não tem [LEADS]/[CLIENTES]
-  const flowsComUtm = new Set(
-    flowRows.filter(r => r.utm_campaign).map(r => r.asset_name)
-  );
-  const emailsSemTerm = [...new Set(
-    itemRows
-      .filter(p => !/LEADS|CLIENTES/i.test(p.item_name || ''))
-      .map(p => p.item_name)
-  )];
+  // E-mails sem [LEADS] ou [CLIENTES] no nome, com referência ao fluxo pai
+  const emailsSemTerm = [];
+  const vistosEmail = new Set();
+  for (const p of itemRows) {
+    if (!/LEADS|CLIENTES/i.test(p.item_name || '') && !vistosEmail.has(p.item_name)) {
+      vistosEmail.add(p.item_name);
+      const fluxoPai = flowRows.find(r => r.asset_id === p.asset_id)?.asset_name || '—';
+      emailsSemTerm.push({ name: p.item_name, fluxo: fluxoPai });
+    }
+  }
 
-  const nFluxos = flowsSemUtm.length;
-  const nEmails = emailsSemTerm.length;
-  if (nFluxos === 0 && nEmails === 0) return;
+  if (flowsSemUtm.length === 0 && emailsSemTerm.length === 0) return;
 
   const el = document.createElement('div');
   el.id = 'flow-utm-alert';
+  el.style.marginTop = '16px';
   page.appendChild(el);
 
-  const resumo = [];
-  if (nFluxos > 0) resumo.push(`${nFluxos} fluxo(s) sem UTM`);
-  if (nEmails > 0) resumo.push(`${nEmails} e-mail(s) sem [LEADS]/[CLIENTES] no nome`);
+  const secFluxos = flowsSemUtm.length > 0 ? `
+    <div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:8px">
+      Fluxos sem UTM configurada · ${flowsSemUtm.length} pendente(s)
+    </div>
+    <div id="utm-flow-list">
+      ${flowsSemUtm.map((r, i) => `
+        <div id="utm-row-${i}" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+          <span style="font-size:12px;color:#78350f;min-width:180px;flex:1">${r.asset_name}</span>
+          <span style="font-size:11px;color:#92400e;white-space:nowrap">utm_campaign:</span>
+          <input id="utm-input-${i}" type="text" placeholder="ex: boas-vindas-novos"
+            style="flex:2;min-width:160px;font-size:12px;padding:5px 8px;border:1px solid #f59e0b;border-radius:4px;outline:none"
+            data-flow="${r.asset_name.replace(/"/g, '&quot;')}" />
+          <button onclick="saveUtmConfig(${i})"
+            style="background:#f59e0b;color:#fff;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">
+            Salvar
+          </button>
+          <span id="utm-status-${i}" style="font-size:11px;color:#78350f"></span>
+        </div>`).join('')}
+    </div>` : '';
 
-  el.style.display = '';
+  const secEmails = emailsSemTerm.length > 0 ? `
+    <div style="font-size:12px;font-weight:600;color:#1e40af;margin:${flowsSemUtm.length > 0 ? '14px' : '0'} 0 8px">
+      E-mails sem [LEADS] / [CLIENTES] no nome · corrigir no Klaviyo
+    </div>
+    <ul style="margin:0 0 0 4px;padding:0;list-style:none">
+      ${emailsSemTerm.map(e => `
+        <li style="font-size:11px;color:#1e3a8a;margin-bottom:4px">
+          <span style="color:#3b82f6">&#9675;</span>
+          <strong>${e.name}</strong>
+          <span style="color:#6b7280"> · ${e.fluxo}</span>
+        </li>`).join('')}
+    </ul>
+    <div style="font-size:11px;color:#6b7280;margin-top:6px">
+      Adicione [LEADS] ou [CLIENTES] ao nome do e-mail no Klaviyo para ativar a atribuição de receita por segmento.
+    </div>` : '';
+
   el.innerHTML = `
-    <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin-top:16px">
-      <div style="font-weight:600;color:#92400e;margin-bottom:6px">⚠ Configuração de UTM necessária</div>
-      <div style="font-size:12px;color:#78350f;margin-bottom:10px">${resumo.join(' · ')} — descreva abaixo as UTMs corretas e salve para eu implementar na próxima sessão.</div>
-      <details style="margin-bottom:10px">
-        <summary style="font-size:12px;color:#92400e;cursor:pointer">Ver lista completa de itens</summary>
-        <ul style="font-size:11px;color:#92400e;margin:6px 0 0 16px">
-          ${[...flowsSemUtm, ...emailsSemTerm].map(p => `<li>${p}</li>`).join('')}
-        </ul>
-      </details>
-      <textarea id="utm-pending-msg" rows="4" style="width:100%;font-size:12px;padding:8px;border:1px solid #f59e0b;border-radius:4px;box-sizing:border-box"
-        placeholder="Ex: [Fluxo Inverno - Clientes 60D] → utm_campaign: inverno-clientes-60d"></textarea>
-      <div style="margin-top:8px">
-        <button onclick="saveUtmPending()" style="background:#f59e0b;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600">
-          Salvar e enviar ao Claude
-        </button>
-        <span id="utm-pending-status" style="font-size:12px;margin-left:10px;color:#78350f"></span>
-      </div>
+    <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:16px">
+      <div style="font-weight:600;color:#92400e;margin-bottom:12px">&#9888; Configuração de UTM necessária</div>
+      ${secFluxos}
+      ${secEmails}
     </div>`;
 }
 
-async function saveUtmPending() {
-  const msg = document.getElementById('utm-pending-msg')?.value?.trim();
-  const statusEl = document.getElementById('utm-pending-status');
-  if (!msg) { if(statusEl) statusEl.textContent = 'Escreva a configuração antes de salvar.'; return; }
-  const { error } = await _sb.from('flow_utm_pending').insert({
-    flow_name: 'múltiplos', email_name: null,
-    issue: 'utm_config_pendente', mensagem: msg
-  });
-  if (error) { if(statusEl) statusEl.textContent = 'Erro ao salvar. Tente novamente.'; return; }
-  if(statusEl) statusEl.textContent = '✓ Salvo! Na próxima sessão com Claude, mencione que há UTMs pendentes.';
-  document.getElementById('utm-pending-msg').value = '';
+async function saveUtmConfig(i) {
+  const input  = document.getElementById('utm-input-' + i);
+  const status = document.getElementById('utm-status-' + i);
+  const btn    = input?.parentElement?.querySelector('button');
+  const flowName    = input?.dataset?.flow || '';
+  const utmCampaign = (input?.value || '').trim();
+
+  if (!utmCampaign) { if (status) status.textContent = 'Preencha o campo.'; return; }
+
+  if (btn)    { btn.disabled = true; btn.textContent = '...'; }
+  if (status) status.textContent = '';
+
+  try {
+    const resp = await fetch('/admin/utm-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ flow_name: flowName, utm_campaign: utmCampaign }),
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(json.error || resp.statusText);
+
+    if (input)  { input.disabled = true; input.style.borderColor = '#10b981'; }
+    if (btn)    { btn.style.display = 'none'; }
+    if (status) { status.textContent = '&#10003; Salvo'; status.style.color = '#047857'; }
+  } catch (err) {
+    if (btn)    { btn.disabled = false; btn.textContent = 'Salvar'; }
+    if (status) { status.textContent = 'Erro: ' + err.message; status.style.color = '#dc2626'; }
+  }
 }
 
 function renderEmailAssetTable(key, rows, color, flowItems){
