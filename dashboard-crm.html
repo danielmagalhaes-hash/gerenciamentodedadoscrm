@@ -2106,6 +2106,14 @@ async function renderChannel(key){
         if(el && el.closest('.card')) el.closest('.card').style.display='none';
       });
 
+      // Layout: move rank-best-eff para a mesma linha do rank-best (lado a lado)
+      const bestCard    = document.getElementById('rank-best-'+key)?.closest('.card');
+      const bestEffCard = document.getElementById('rank-best-eff-'+key)?.closest('.card');
+      const firstRow    = bestCard?.parentElement;
+      const secondRow   = bestEffCard?.parentElement;
+      if(firstRow && bestEffCard){ firstRow.appendChild(bestEffCard); }
+      if(secondRow) secondRow.style.display = 'none';
+
       // Atualiza títulos dos 2 cards visíveis
       const bestEl = document.getElementById('rank-best-'+key);
       if(bestEl && bestEl.closest('.card'))
