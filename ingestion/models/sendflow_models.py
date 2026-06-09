@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SendflowRelease(BaseModel):
@@ -22,6 +22,18 @@ class SendflowGroup(BaseModel):
 class SendflowAnalyticsMetric(BaseModel):
     dates: dict[str, int] = {}
     total: int = 0
+
+    @field_validator("dates", mode="before")
+    @classmethod
+    def normalizar_datas(cls, v: dict) -> dict:
+        """API retorna chaves em DDMMYYYY — converte para YYYY-MM-DD."""
+        result = {}
+        for k, val in (v or {}).items():
+            if len(k) == 8 and k.isdigit():
+                result[f"{k[4:]}-{k[2:4]}-{k[:2]}"] = val
+            else:
+                result[k] = val
+        return result
 
 
 class SendflowAnalytics(BaseModel):
