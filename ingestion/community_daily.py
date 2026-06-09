@@ -39,11 +39,16 @@ logger = logging.getLogger(__name__)
 BACKFILL_START = date(2026, 1, 1)
 
 
-def run_for_period(date_from: date, date_to: date) -> None:
+def run_for_period(
+    date_from: date,
+    date_to: date,
+    release_id_filter: str | None = None,
+) -> None:
     logger.info({
         "event": "community_run_start",
         "date_from": date_from.isoformat(),
         "date_to": date_to.isoformat(),
+        "release_id_filter": release_id_filter,
     })
 
     sb = get_supabase_client()
@@ -53,6 +58,10 @@ def run_for_period(date_from: date, date_to: date) -> None:
     # 1. Sync de estrutura: releases → dim_assets
     releases = fetch_releases()
     writers.upsert_community_assets(sb, releases, channel_ids)
+    if release_id_filter:
+        releases = [r for r in releases if r.id == release_id_filter]
+        if not releases:
+            raise ValueError(f"release_id não encontrado: '{release_id_filter}'")
 
     # Mapa release_id → asset_uuid após upsert
     asset_map = writers.get_sendflow_asset_map(sb)
@@ -129,14 +138,19 @@ def main() -> None:
         "--since", type=str, default=None,
         help="Data inicial customizada (YYYY-MM-DD) — carrega até ontem",
     )
+    parser.add_argument(
+        "--release-id", type=str, default=None,
+        help="Limita a execução a uma única release (ID do Sendflow)",
+    )
     args = parser.parse_args()
 
     date_to = date.today() - timedelta(days=1)
+    release_id_filter = args.release_id or None
 
     if args.backfill:
-        run_for_period(BACKFILL_START, date_to)
+        run_for_period(BACKFILL_START, date_to, release_id_filter)
     elif args.since:
-        run_for_period(date.fromisoformat(args.since), date_to)
+        run_for_period(date.fromisoformat(args.since), date_to, release_id_filter)
     else:
         run_yesterday()
 

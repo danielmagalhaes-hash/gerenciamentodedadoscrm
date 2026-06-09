@@ -57,8 +57,9 @@ def fetch_release_actions(
     """
     Retorna ações de disparo (sendMessages, processed=true) de uma release.
 
+    A API /actions não aceita type/processed/limit como query params — esses campos
+    existem apenas no body de resposta. Filtragem é feita client-side.
     Pagina respeitando o rate limit de 10s entre chamadas.
-    Filtra client-side por [since, until] quando informados.
     """
     actions: list[SendflowAction] = []
     cursor: str | None = None
@@ -68,12 +69,7 @@ def fetch_release_actions(
             if page > 0:
                 time.sleep(_ACTIONS_THROTTLE_S)
 
-            params: dict = {
-                "releaseId": release_id,
-                "type": "sendMessages",
-                "processed": "true",
-                "limit": 100,
-            }
+            params: dict = {"releaseId": release_id}
             if cursor:
                 params["cursor"] = cursor
 
@@ -81,8 +77,14 @@ def fetch_release_actions(
             resp.raise_for_status()
             data = resp.json()
 
-            for item in data.get("actions", []):
+            page_actions = data.get("actions", [])
+            for item in page_actions:
                 action = SendflowAction.model_validate(item)
+
+                # Filtra somente disparos processados com sucesso
+                if action.type != "sendMessages" or not action.processed:
+                    continue
+
                 action_date = action.created_at.date()
                 if since and action_date < since:
                     continue
