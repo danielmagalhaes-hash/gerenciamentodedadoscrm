@@ -1058,7 +1058,7 @@ async function fetchEmailChannelDaily(slug, start, end) {
 }
 async function fetchCommunityDaily(start, end) {
   const {data,error} = await _sb.from('vw_community_daily')
-    .select('date,sends_count,members_added,members_removed,link_clicks,revenue_brl,orders')
+    .select('date,sends_count,members_added,members_removed,link_clicks,total_members,total_groups,revenue_brl,orders')
     .gte('date',start).lte('date',end).order('date');
   if (error) { console.error('fetchCommunityDaily error:', error); return []; }
   return data || [];
@@ -1829,11 +1829,13 @@ async function renderChannel(key){
   for (const r of emailDaily) emByDay[(r.date||'').slice(0,10)] = r;
 
   const coTotals = communityDaily.reduce((a,r)=>({
-    disparos: a.disparos + (+r.sends_count||0),
-    entradas: a.entradas + (+r.members_added||0),
-    saidas:   a.saidas   + (+r.members_removed||0),
-    cliques:  a.cliques  + (+r.link_clicks||0),
-  }), {disparos:0, entradas:0, saidas:0, cliques:0});
+    disparos:      a.disparos      + (+r.sends_count||0),
+    entradas:      a.entradas      + (+r.members_added||0),
+    saidas:        a.saidas        + (+r.members_removed||0),
+    cliques:       a.cliques       + (+r.link_clicks||0),
+    total_members: r.total_members != null ? +r.total_members : a.total_members,
+    total_groups:  r.total_groups  != null ? +r.total_groups  : a.total_groups,
+  }), {disparos:0, entradas:0, saidas:0, cliques:0, total_members:null, total_groups:null});
   const coByDay = {};
   for (const r of communityDaily) coByDay[(r.date||'').slice(0,10)] = r;
 
@@ -2029,6 +2031,8 @@ async function renderChannel(key){
   } else if(isCommunity){
     const liquido = coTotals.entradas - coTotals.saidas;
     spec = [
+      {label:'Participantes',       val:coTotals.total_members!=null ? fmtInt(coTotals.total_members) : '—'},
+      {label:'Grupos',              val:coTotals.total_groups!=null  ? fmtInt(coTotals.total_groups)  : '—'},
       {label:'Disparos',            val:fmtInt(coTotals.disparos)},
       {label:'Entradas',            val:'+'+fmtInt(coTotals.entradas)},
       {label:'Saídas',              val:'-'+fmtInt(coTotals.saidas)},
