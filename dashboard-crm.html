@@ -1056,6 +1056,13 @@ async function fetchEmailChannelDaily(slug, start, end) {
   if (error) { console.error('fetchEmailChannelDaily error:', error); return []; }
   return data || [];
 }
+async function fetchCommunityDaily(start, end) {
+  const {data,error} = await _sb.from('vw_community_daily')
+    .select('date,sends_count,members_added,members_removed,link_clicks,revenue_brl,orders')
+    .gte('date',start).lte('date',end).order('date');
+  if (error) { console.error('fetchCommunityDaily error:', error); return []; }
+  return data || [];
+}
 async function fetchEmailAssets(slug, start, end) {
   const isCampaign = slug === 'email_campaign';
   const viewName = 'vw_campaign_email_metrics';
@@ -1731,7 +1738,7 @@ async function renderChannel(key){
 
   let allRows = [], revByType = [], allCompRows = [], compRevByType = [];
   let emailDaily = [], emailAssetRows = [], flowItemsMap = {}, inscritos = 0;
-  let emailFlowItemRows = [];
+  let emailFlowItemRows = [], communityDaily = [];
   try {
     const fetches = [
       fetchChannelData(start, end),
@@ -1745,6 +1752,9 @@ async function renderChannel(key){
     }
     if (key === 'ef') {
       fetches.push(fetchEmailFlowItems(start, end));
+    }
+    if (isCommunity) {
+      fetches.push(fetchCommunityDaily(start, end));
     }
     const results = await Promise.all(fetches);
     allRows = results[0]; revByType = results[1];
@@ -1761,6 +1771,7 @@ async function renderChannel(key){
         .filter(item => /EM001/i.test(item.item_name || ''))
         .reduce((sum, item) => sum + (+item.sends || 0), 0);
     }
+    if (isCommunity) communityDaily = results[4] || [];
   } catch(err) {
     document.getElementById('kpi-'+key).innerHTML =
       `<div style="grid-column:1/-1;color:var(--danger);padding:20px">Erro ao carregar: ${err.message}</div>`;
@@ -1816,6 +1827,15 @@ async function renderChannel(key){
 
   let emByDay = {};
   for (const r of emailDaily) emByDay[(r.date||'').slice(0,10)] = r;
+
+  const coTotals = communityDaily.reduce((a,r)=>({
+    disparos: a.disparos + (+r.sends_count||0),
+    entradas: a.entradas + (+r.members_added||0),
+    saidas:   a.saidas   + (+r.members_removed||0),
+    cliques:  a.cliques  + (+r.link_clicks||0),
+  }), {disparos:0, entradas:0, saidas:0, cliques:0});
+  const coByDay = {};
+  for (const r of communityDaily) coByDay[(r.date||'').slice(0,10)] = r;
 
   // ── Filtro por fluxo específico (E-mail Fluxo) ────────────────────
   let activeFlowFilter = null;
@@ -1880,10 +1900,10 @@ async function renderChannel(key){
   const compConv   = safe(compTotals.orders, compTotals.sessions);
   const compRps    = safe(compTotals.revenue_brl, compTotals.sessions);
 
-  // Volumes: mock para WPP (Vekta ainda sem dados)
+  // Volumes: mock para WPP (Vekta ainda sem dados); real para Comunidade
   let disparos=0, participantes=0;
   if(isWpp){ disparos = Math.round(s.purchases*80*rand(1.5,2.5)); }
-  else if(isCommunity){ participantes = Math.round(s.purchases*150); disparos = Math.round(participantes*rand(8,15)); }
+  else if(isCommunity){ disparos = coTotals.disparos; }
 
   // KPIs do canal — 6º card: CTOR real para e-mail, mock para WPP
   const kpis = [
@@ -1907,8 +1927,8 @@ async function renderChannel(key){
       <div class="kpi-deltas">${k.delta||''}<span class="delta-label">${dlabel(start)} → ${dlabel(end)}</span></div>
     </div>`).join('');
 
-  // Aviso de dados fictícios — WPP e Comunidade
-  if(isWpp || isCommunity){
+  // Aviso de dados fictícios — WPP (Vekta sem integração)
+  if(isWpp){
     const notice = document.createElement('div');
     notice.style.cssText = 'background:#fef3c7;border:1px solid #d97706;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#92400e;';
     notice.innerHTML = '⚠️ <strong>Dados parcialmente fictícios:</strong> apenas a <strong>receita</strong> é real (atribuição UTM). Disparos, sessões e rankings são estimativas aguardando integração com Vekta e Sendflow.';
@@ -1971,6 +1991,17 @@ async function renderChannel(key){
         scales:{x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0}},
                 y:{ticks:{callback:v=>fmtBRL2(v),font:{size:10}},grid:{color:'#f1f4f8'}}}}
     });
+  } else if(isCommunity){
+    const dailyEff = dates.map(d=>{
+      const rev   = byDay[d]?.revenue_brl||0;
+      const sends = +coByDay[d]?.sends_count||0;
+      return (sends>0&&rev>0) ? rev/sends : null;
+    });
+    mkChart('chart-eff-'+key,{
+      type:'line',
+      data:{labels:dlabels,datasets:[{label:'Receita / Disparo',data:dailyEff,borderColor:ch.color,backgroundColor:ch.color+'22',fill:true,tension:.35,pointRadius:3,pointBackgroundColor:ch.color,borderWidth:2,spanGaps:false}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'R$/disparo: '+fmtBRL2(c.parsed.y)}}},scales:{x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0}},y:{ticks:{callback:v=>fmtBRL2(v),font:{size:10}},grid:{color:'#f1f4f8'}}}}
+    });
   } else {
     const dailyBase = disparos/Math.max(dates.length,1);
     const dailyEff = dates.map(d=>safe(byDay[d]?.revenue_brl||0, Math.max(dailyBase*rand(0.85,1.15),1)));
@@ -1996,16 +2027,14 @@ async function renderChannel(key){
         : {label:'Receita / Disparo',  val:em.sends>0?fmtBRL2(safe(s.rev,em.sends)):'—'},
     ];
   } else if(isCommunity){
-    const entradas = Math.round(participantes*0.12);
-    const saidas   = Math.round(participantes*0.05);
+    const liquido = coTotals.entradas - coTotals.saidas;
     spec = [
-      {label:'Participantes',          val:fmtInt(participantes)},
-      {label:'Entradas (30d)',          val:'+'+fmtInt(entradas)},
-      {label:'Saídas (30d)',            val:'-'+fmtInt(saidas)},
-      {label:'Crescimento líquido',     val:'+'+fmtInt(entradas-saidas)},
-      {label:'Disparos',               val:fmtInt(disparos)},
-      {label:'Receita / Participante', val:fmtBRL2(safe(s.rev,participantes))},
-      {label:'Receita / Disparo',      val:fmtBRL2(safe(s.rev,disparos))},
+      {label:'Disparos',            val:fmtInt(coTotals.disparos)},
+      {label:'Entradas',            val:'+'+fmtInt(coTotals.entradas)},
+      {label:'Saídas',              val:'-'+fmtInt(coTotals.saidas)},
+      {label:'Crescimento líquido', val:(liquido>=0?'+':'')+fmtInt(liquido)},
+      {label:'Cliques no link',     val:fmtInt(coTotals.cliques)},
+      {label:'Receita / Disparo',   val:fmtBRL2(safe(s.rev,coTotals.disparos))},
     ];
   } else {
     // WPP Fluxo / Campanha — mock
@@ -2122,8 +2151,26 @@ async function renderChannel(key){
       if(effEl && effEl.closest('.card'))
         effEl.closest('.card').querySelector('.card-title').textContent = 'Top 5 · Receita / Inscrito';
     }
+  } else if(isCommunity){
+    // Comunidade: uma linha por campanha — dados reais do banco
+    const assetData = (coTotals.disparos>0||s.rev>0) ? [{
+      name:'CAMPANHA #01 - NOVIDADES MINIMAL',
+      rev:s.rev, purchases:s.purchases, sessions:s.sessions,
+      sends:coTotals.disparos,
+      ticket:safe(s.rev,s.purchases), conv:safe(s.purchases,s.sessions),
+      rps:safe(s.rev,s.sessions), revPer:safe(s.rev,coTotals.disparos), pieces:[],
+    }] : [];
+    renderAssetTable(key, assetData, cfg, false, false, true);
+    if(assetData.length>0){
+      document.getElementById('rank-best-'+key).innerHTML = rankRow(1,assetData[0].name,fmtBRLfull(assetData[0].rev),1,ch.color);
+      document.getElementById('rank-best-eff-'+key).innerHTML = rankRow(1,assetData[0].name,fmtBRL2(assetData[0].revPer),1,ch.color);
+    }
+    ['rank-worst-'+key,'rank-worst-eff-'+key].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el?.closest('.card')) el.closest('.card').style.display='none';
+    });
   } else if(!isEmail){
-    // WPP/Community: tabela mock
+    // WPP: tabela mock (Vekta sem integração)
     const assets = ASSETS[key];
     const totalShare = assets.map(()=>rand(0.5,1.5));
     const sumShare = totalShare.reduce((a,b)=>a+b,0);
@@ -2137,7 +2184,7 @@ async function renderChannel(key){
         ticket:rev/Math.max(purchases,1), conv:purchases/Math.max(sessions,1), rps:rev/Math.max(sessions,1),
         revPer:rev/Math.max(sends,1), pieces:[]};
     });
-    renderAssetTable(key, assetData, cfg, false, isWpp, isCommunity);
+    renderAssetTable(key, assetData, cfg, false, isWpp, false);
 
     // Rankings mock para WPP
     const byRev = [...assetData].sort((a,b)=>b.rev-a.rev);
