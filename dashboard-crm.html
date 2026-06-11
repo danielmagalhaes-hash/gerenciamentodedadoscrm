@@ -1252,10 +1252,10 @@ async function fetchEmailFlowItems(start, end) {
     return m ? parseInt(m[1], 10) : null;
   };
   async function _run(s, e) {
+    // Usa RPC para agregar no banco (1 linha por mensagem) em vez de buscar
+    // 1 linha por (mensagem × dia) da view — evita o limite de linhas do Supabase
     const [{ data: rows, error }, { data: revRows }] = await Promise.all([
-      _sb.from('vw_flow_email_items')
-        .select('flow_id,message_id,message_name,sends,opens,clicks,utm_campaign,utm_term')
-        .gte('data', s).lte('data', e).limit(50000),
+      _sb.rpc('get_flow_item_metrics', { start_date: s, end_date: e }),
       _sb.from('vw_flow_item_revenue')
         .select('utm_campaign,utm_term,utm_content,revenue_brl')
         .gte('order_date', s).lte('order_date', e).limit(50000),
@@ -1274,45 +1274,31 @@ async function fetchEmailFlowItems(start, end) {
       revFull[kFull] = (revFull[kFull] || 0) + parseFloat(r.revenue_brl || 0);
       revCamp[kCamp] = (revCamp[kCamp] || 0) + parseFloat(r.revenue_brl || 0);
     }
-    // Agrega por message_id com receita
-    const agg = {};
-    for (const r of rows) {
-      const mid = r.message_id;
-      if (!agg[mid]) {
-        // Extrai número do e-mail a partir do message_name: [EM001] → 1
-        const emMatch = (r.message_name || '').match(/\[EM(\d+)\]/i);
-        const emNum = emMatch ? parseInt(emMatch[1], 10) : null;
-        let revenue_brl = null;
-        if (emNum !== null && r.utm_campaign) {
-          const c = r.utm_campaign.toLowerCase();
-          if (r.utm_term) {
-            const rev = revFull[`${c}|${r.utm_term.toLowerCase()}|${emNum}`];
-            if (rev !== undefined) revenue_brl = rev;
-          } else {
-            const rev = revCamp[`${c}||${emNum}`];
-            if (rev !== undefined) revenue_brl = rev;
-          }
+    // RPC já retorna 1 linha por message_id agregada — mapeia diretamente
+    return rows.map(r => {
+      const emMatch = (r.message_name || '').match(/\[EM(\d+)\]/i);
+      const emNum = emMatch ? parseInt(emMatch[1], 10) : null;
+      let revenue_brl = null;
+      if (emNum !== null && r.utm_campaign) {
+        const c = r.utm_campaign.toLowerCase();
+        if (r.utm_term) {
+          const rev = revFull[`${c}|${r.utm_term.toLowerCase()}|${emNum}`];
+          if (rev !== undefined) revenue_brl = rev;
+        } else {
+          const rev = revCamp[`${c}||${emNum}`];
+          if (rev !== undefined) revenue_brl = rev;
         }
-        agg[mid] = {
-          asset_id: r.flow_id, item_id: mid,
-          item_name: r.message_name, item_position: 9999, is_active: true,
-          sends: 0, opens: 0, clicks: 0, bounces: 0, unsubscribes: 0,
-          open_rate_pct: 0, ctor_pct: 0,
-          revenue_brl: revenue_brl, has_utm: !!(r.utm_campaign),
-        };
       }
-      agg[mid].sends  += +(r.sends  || 0);
-      agg[mid].opens  += +(r.opens  || 0);
-      agg[mid].clicks += +(r.clicks || 0);
-    }
-    return Object.values(agg).map(f => ({
-      asset_id: f.asset_id, item_id: f.item_id,
-      item_name: f.item_name, item_position: f.item_position, is_active: f.is_active,
-      sends: f.sends, opens: f.opens, clicks: f.clicks, bounces: 0, unsubscribes: 0,
-      open_rate_pct: f.sends > 0 ? +(f.opens / f.sends * 100).toFixed(2) : 0,
-      ctor_pct:      f.opens > 0 ? +(f.clicks / f.opens * 100).toFixed(2) : 0,
-      revenue_brl: f.revenue_brl, has_utm: f.has_utm,
-    })).filter(f => f.sends > 0);
+      const sends = +(r.sends || 0), opens = +(r.opens || 0), clicks = +(r.clicks || 0);
+      return {
+        asset_id: r.flow_id, item_id: r.message_id,
+        item_name: r.message_name, item_position: 9999, is_active: true,
+        sends, opens, clicks, bounces: 0, unsubscribes: 0,
+        open_rate_pct: sends > 0 ? +(opens / sends * 100).toFixed(2) : 0,
+        ctor_pct:      opens > 0 ? +(clicks / opens * 100).toFixed(2) : 0,
+        revenue_brl, has_utm: !!(r.utm_campaign),
+      };
+    }).filter(f => f.sends > 0);
   }
   let result = await _run(start, end);
   if (!result.length) { const fb = _efFallbackWindow(); result = await _run(fb.start, fb.end); }
