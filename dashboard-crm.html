@@ -1845,6 +1845,7 @@ async function renderChannel(key){
   let allRows = [], revByType = [], allCompRows = [], compRevByType = [];
   let emailDaily = [], emailAssetRows = [], flowItemsMap = {}, inscritos = 0;
   let emailFlowItemRows = [], communityDaily = [], communityMsgRows = [];
+  let em001ByDay = {};
   try {
     const fetches = [
       fetchChannelData(start, end),
@@ -1858,6 +1859,7 @@ async function renderChannel(key){
     }
     if (key === 'ef') {
       fetches.push(fetchEmailFlowItems(start, end));
+      fetches.push(_sb.rpc('get_daily_em001_sends', { start_date: start, end_date: end }));
     }
     if (isCommunity) {
       fetches.push(fetchCommunityDaily(start, end));
@@ -1877,6 +1879,9 @@ async function renderChannel(key){
       inscritos = results[6]
         .filter(item => /EM001/i.test(item.item_name || ''))
         .reduce((sum, item) => sum + (+item.sends || 0), 0);
+    }
+    if (key === 'ef' && results[7]) {
+      for (const r of (results[7].data || [])) em001ByDay[(r.data||'').slice(0,10)] = +r.sends || 0;
     }
     if (isCommunity) { communityDaily = results[4] || []; communityMsgRows = results[5] || []; }
   } catch(err) {
@@ -1988,6 +1993,12 @@ async function renderChannel(key){
         // Inscritos apenas do fluxo selecionado
         const flowItems = emailFlowItemRows.filter(p => p.asset_id === selRow.asset_id);
         inscritos = flowItems.filter(p => /EM001/i.test(p.item_name||'')).reduce((sum,p)=>sum+(+p.sends||0),0);
+        // EM001 diário do fluxo selecionado para o gráfico
+        const { data: em001Days } = await _sb.rpc('get_daily_em001_sends', {
+          start_date: start, end_date: end, p_flow_id: selRow.asset_id
+        });
+        em001ByDay = {};
+        for (const r of em001Days || []) em001ByDay[(r.data||'').slice(0,10)] = +r.sends || 0;
       }
     }
   }
@@ -2081,25 +2092,25 @@ async function renderChannel(key){
                 y:{ticks:{callback:v=>fmtBRL2(v),font:{size:10}},grid:{color:'#f1f4f8'}}}}
     });
   } else if(isEmail){
-    // E-mail Fluxo: Receita / Disparo por dia (receita diária ÷ disparos do dia)
-    // R$/inscrito pertence ao KPI card — num gráfico diário o denominador seria
-    // o total acumulado do período, tornando cada ponto artificialmente pequeno
-    const revPorDisparo = dates.map(d => {
+    // E-mail Fluxo: Receita / Inscrito por dia
+    // numerador = receita atribuída ao canal/fluxo naquele dia
+    // denominador = disparos EM001 naquele dia (novos inscritos do dia)
+    const revPorInscrito = dates.map(d => {
       const rev   = byDay[d]?.revenue_brl || 0;
-      const sends = emByDay[d]?.sends     || 0;
-      return (sends > 0 && rev > 0) ? rev / sends : null;
+      const em001 = em001ByDay[d]         || 0;
+      return (em001 > 0 && rev > 0) ? rev / em001 : null;
     });
     mkChart('chart-eff-'+key,{
       type:'line',
       data:{labels:dlabels,datasets:[{
-        label:'Receita / Disparo',
-        data:revPorDisparo,
+        label:'Receita / Inscrito',
+        data:revPorInscrito,
         borderColor:ch.color, backgroundColor:ch.color+'22',
         fill:true, tension:.35, pointRadius:3, pointBackgroundColor:ch.color, borderWidth:2,
         spanGaps:false,
       }]},
       options:{responsive:true,maintainAspectRatio:false,
-        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'R$/disparo: '+fmtBRL2(c.parsed.y)}}},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'R$/inscrito: '+fmtBRL2(c.parsed.y)}}},
         scales:{x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0}},
                 y:{ticks:{callback:v=>fmtBRL2(v),font:{size:10}},grid:{color:'#f1f4f8'}}}}
     });
