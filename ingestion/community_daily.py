@@ -15,6 +15,7 @@ Modos de uso:
 import argparse
 import logging
 import sys
+import unicodedata
 from datetime import date, timedelta
 
 from dotenv import load_dotenv
@@ -38,6 +39,16 @@ logger = logging.getLogger(__name__)
 
 BACKFILL_START = date(2026, 1, 1)
 
+# Releases cujo nome contém estas strings (após normalização) são ignoradas
+_IGNORED_KEYWORDS = {"meteorico"}
+
+
+def _is_ignored_release(name: str) -> bool:
+    """Retorna True para releases que nunca devem ser ingeridas (ex: Meteórico)."""
+    normalized = unicodedata.normalize("NFD", name.lower())
+    ascii_name = "".join(c for c in normalized if unicodedata.category(c) != "Mn")
+    return any(kw in ascii_name for kw in _IGNORED_KEYWORDS)
+
 
 def run_for_period(
     date_from: date,
@@ -55,9 +66,14 @@ def run_for_period(
     channel_ids = writers.get_channel_ids(sb)
     channel_id = channel_ids["wpp_community"]
 
-    # 1. Sync de estrutura: releases → dim_assets
+    # 1. Sync de estrutura: releases → dim_assets (ignora releases meteórico)
     releases = fetch_releases()
-    writers.upsert_community_assets(sb, releases, channel_ids)
+    active_releases = [r for r in releases if not _is_ignored_release(r.name)]
+    ignored = [r.name for r in releases if _is_ignored_release(r.name)]
+    if ignored:
+        logger.info({"event": "community_releases_ignored", "names": ignored})
+    writers.upsert_community_assets(sb, active_releases, channel_ids)
+    releases = active_releases
     if release_id_filter:
         releases = [r for r in releases if r.id == release_id_filter]
         if not releases:
