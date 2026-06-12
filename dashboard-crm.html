@@ -2147,6 +2147,29 @@ async function renderChannel(key){
       data:{labels:dlabels,datasets:[{label:'Receita / Disparo',data:dailyEff,borderColor:ch.color,backgroundColor:ch.color+'22',fill:true,tension:.35,pointRadius:3,pointBackgroundColor:ch.color,borderWidth:2,spanGaps:false}]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'R$/disparo: '+fmtBRL2(c.parsed.y)}}},scales:{x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0}},y:{ticks:{callback:v=>fmtBRL2(v),font:{size:10}},grid:{color:'#f1f4f8'}}}}
     });
+  } else if(key === 'wf') {
+    // WPP Fluxo: Receita / Inscrito por dia (inscritos = base acumulada desde 2026-06-12)
+    const wppTotalInscritos = wppInscritosByFlow.reduce((sum, r) => sum + (+r.total_inscritos || 0), 0);
+    const wppCutoff = '2026-06-12';
+    const revPorInscritoWpp = dates.map(d => {
+      if (d < wppCutoff) return null;
+      const rev = byDay[d]?.revenue_brl || 0;
+      return (wppTotalInscritos > 0 && rev > 0) ? rev / wppTotalInscritos : null;
+    });
+    mkChart('chart-eff-'+key, {
+      type:'line',
+      data:{labels:dlabels, datasets:[{
+        label:'Receita / Inscrito',
+        data:revPorInscritoWpp,
+        borderColor:ch.color, backgroundColor:ch.color+'22',
+        fill:true, tension:.35, pointRadius:3, pointBackgroundColor:ch.color, borderWidth:2,
+        spanGaps:false,
+      }]},
+      options:{responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>'R$/inscrito: '+fmtBRL2(c.parsed.y)}}},
+        scales:{x:{grid:{display:false}, ticks:{font:{size:9}, maxRotation:0}},
+                y:{ticks:{callback:v=>fmtBRL2(v), font:{size:10}}, grid:{color:'#f1f4f8'}}}}
+    });
   } else {
     const dailyBase = disparos/Math.max(dates.length,1);
     const dailyEff = dates.map(d=>safe(byDay[d]?.revenue_brl||0, Math.max(dailyBase*rand(0.85,1.15),1)));
