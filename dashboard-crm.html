@@ -1332,6 +1332,21 @@ async function fetchFlowDailyRevenue(flowName, start, end) {
   }
   return { byDay, total, orders };
 }
+async function fetchWppFlowInscritos() {
+  const { data } = await _sb.from('vw_wpp_flow_inscritos').select('flow_name,total_inscritos,ingested_at');
+  return data || [];
+}
+async function fetchWppFlowLeads(start, end) {
+  const { data } = await _sb.from('vw_wpp_flow_leads')
+    .select('flow_name,data,respostas,destravar_objecao,necessita_atencao')
+    .gte('data', start).lte('data', end);
+  return data || [];
+}
+async function fetchWppFlowUnknown() {
+  const { data } = await _sb.from('vw_wpp_flow_unknown').select('source,value,occurrences');
+  return data || [];
+}
+
 function aggregateTotals(rows) {
   const byChannel={}, byDate={};
   for (const r of rows) {
@@ -1846,6 +1861,7 @@ async function renderChannel(key){
   let emailDaily = [], emailAssetRows = [], flowItemsMap = {}, inscritos = 0;
   let emailFlowItemRows = [], communityDaily = [], communityMsgRows = [];
   let em001ByDay = {};
+  let wppInscritosByFlow = [], wppLeadsRows = [], wppUnknownRows = [];
   try {
     const fetches = [
       fetchChannelData(start, end),
@@ -1864,6 +1880,11 @@ async function renderChannel(key){
     if (isCommunity) {
       fetches.push(fetchCommunityDaily(start, end));
       fetches.push(fetchCommunityMessageRevenue());
+    }
+    if (key === 'wf') {
+      fetches.push(fetchWppFlowInscritos());
+      fetches.push(fetchWppFlowLeads(start, end));
+      fetches.push(fetchWppFlowUnknown());
     }
     const results = await Promise.all(fetches);
     allRows = results[0]; revByType = results[1];
@@ -1884,6 +1905,7 @@ async function renderChannel(key){
       for (const r of (results[7].data || [])) em001ByDay[(r.data||'').slice(0,10)] = +r.sends || 0;
     }
     if (isCommunity) { communityDaily = results[4] || []; communityMsgRows = results[5] || []; }
+    if (key === 'wf') { wppInscritosByFlow = results[4] || []; wppLeadsRows = results[5] || []; wppUnknownRows = results[6] || []; }
   } catch(err) {
     document.getElementById('kpi-'+key).innerHTML =
       `<div style="grid-column:1/-1;color:var(--danger);padding:20px">Erro ao carregar: ${err.message}</div>`;
@@ -2161,24 +2183,27 @@ async function renderChannel(key){
       {label:'Cliques no link',     val:fmtInt(coTotals.cliques)},
       {label:'Receita / Disparo',   val:fmtBRL2(safe(s.rev,coTotals.disparos))},
     ];
+  } else if(key === 'wf') {
+    // WPP Fluxo — dados reais do banco
+    const totalInscritos = wppInscritosByFlow.reduce((sum, r) => sum + (+r.total_inscritos || 0), 0);
+    const totalRespostas = wppLeadsRows.reduce((sum, r) => sum + (+r.respostas || 0), 0);
+    const totalDestravar = wppLeadsRows.reduce((sum, r) => sum + (+r.destravar_objecao || 0), 0);
+    const totalNecessita = wppLeadsRows.reduce((sum, r) => sum + (+r.necessita_atencao || 0), 0);
+    spec = [
+      {label:'Inscritos',          val: totalInscritos > 0 ? fmtInt(totalInscritos) : '—'},
+      {label:'Respostas',          val: fmtInt(totalRespostas)},
+      {label:'Taxa de Resposta',   val: totalInscritos > 0 ? fmtPct1(safe(totalRespostas, totalInscritos)) : '—'},
+      {label:'Destravar Objeção',  val: fmtInt(totalDestravar)},
+      {label:'Necessita Atenção',  val: fmtInt(totalNecessita)},
+      {label:'Receita / Inscrito', val: totalInscritos > 0 ? fmtBRL2(safe(s.rev, totalInscritos)) : '—'},
+      {label:'Receita / Compra',   val: s.purchases > 0 ? fmtBRL2(safe(s.rev, s.purchases)) : '—'},
+    ];
   } else {
-    // WPP Fluxo / Campanha — mock
-    const inscritos_wpp = Math.round(s.purchases*80);
+    // WPP Campanha — mock (sem integração Vekta ainda)
     const respostas = Math.round(disparos*rand(0.06,0.14));
     const destrava  = Math.round(respostas*rand(0.55,0.75));
     const leadsCom  = Math.round(destrava*rand(0.35,0.55));
-    spec = cfg.showInscritos ? [
-      {label:'Inscritos',               val:fmtInt(inscritos_wpp)},
-      {label:'Disparos',                val:fmtInt(disparos)},
-      {label:'Cobertura (Disp./Insc.)', val:fmtPct1(safe(disparos,inscritos_wpp))},
-      {label:'Respostas',               val:fmtInt(respostas)},
-      {label:'Taxa de Resposta',        val:fmtPct1(safe(respostas,disparos))},
-      {label:'Destravar Objeção',       val:fmtInt(destrava)},
-      {label:'Leads → Comercial',       val:fmtInt(leadsCom)},
-      {label:'Retenção da IA',          val:fmtPct1(safe(leadsCom,respostas))},
-      {label:'Receita / Inscrito',      val:fmtBRL2(safe(s.rev,inscritos_wpp))},
-      {label:'Receita / Disparo',       val:fmtBRL2(safe(s.rev,disparos))},
-    ] : [
+    spec = [
       {label:'Disparos',               val:fmtInt(disparos)},
       {label:'Respostas',              val:fmtInt(respostas)},
       {label:'Taxa de Resposta',       val:fmtPct1(safe(respostas,disparos))},
@@ -2295,8 +2320,12 @@ async function renderChannel(key){
       if(el?.closest('.card')) el.closest('.card').style.display='none';
     });
     renderCommunityMessageRanking(key, communityMsgRows);
+  } else if(key === 'wf') {
+    // WPP Fluxo — dados reais do banco
+    renderWppFlowTable(key, wppInscritosByFlow, wppLeadsRows, ch.color);
+    renderWppFlowUnknown(wppUnknownRows);
   } else if(!isEmail){
-    // WPP: tabela mock (Vekta sem integração)
+    // WPP Campanha — mock (Vekta sem integração)
     const assets = ASSETS[key];
     const totalShare = assets.map(()=>rand(0.5,1.5));
     const sumShare = totalShare.reduce((a,b)=>a+b,0);
@@ -2312,7 +2341,6 @@ async function renderChannel(key){
     });
     renderAssetTable(key, assetData, cfg, false, isWpp, false);
 
-    // Rankings mock para WPP
     const byRev = [...assetData].sort((a,b)=>b.rev-a.rev);
     const byMetric = [...assetData].sort((a,b)=>b.revPer-a.revPer);
     const maxRev = byRev[0]?.rev || 1;
@@ -2322,6 +2350,114 @@ async function renderChannel(key){
     document.getElementById('rank-best-eff-'+key).innerHTML = byMetric.slice(0,5).map((a,i)=>rankRow(i+1,a.name,fmtBRL2(a.revPer),a.revPer/maxMetric,ch.color)).join('');
     document.getElementById('rank-worst-eff-'+key).innerHTML = byMetric.slice(-5).reverse().map((a,i)=>rankRow(i+1,a.name,fmtBRL2(a.revPer),a.revPer/maxMetric,'#94a3b8')).join('');
   }
+}
+
+function renderWppFlowTable(key, inscritosByFlow, leadsRows, color) {
+  const inscMap = {};
+  for (const r of inscritosByFlow) inscMap[r.flow_name] = +r.total_inscritos || 0;
+
+  const leadsMap = {};
+  for (const r of leadsRows) {
+    if (!leadsMap[r.flow_name]) leadsMap[r.flow_name] = {respostas:0, destravar_objecao:0, necessita_atencao:0};
+    leadsMap[r.flow_name].respostas         += +r.respostas || 0;
+    leadsMap[r.flow_name].destravar_objecao += +r.destravar_objecao || 0;
+    leadsMap[r.flow_name].necessita_atencao += +r.necessita_atencao || 0;
+  }
+
+  const allFlows = [...new Set([...Object.keys(inscMap), ...Object.keys(leadsMap)])].sort();
+
+  if (allFlows.length === 0) {
+    document.getElementById('table-asset-' + key).innerHTML =
+      '<tr><td colspan="5" style="color:var(--muted);padding:16px;text-align:center">Sem dados no período.</td></tr>';
+  } else {
+    const rows = allFlows.map(f => ({
+      name: f,
+      inscritos: inscMap[f] || 0,
+      respostas: leadsMap[f]?.respostas || 0,
+      destravar: leadsMap[f]?.destravar_objecao || 0,
+      necessita: leadsMap[f]?.necessita_atencao || 0,
+    }));
+    document.getElementById('table-asset-' + key).innerHTML = `
+      <thead><tr>
+        <th>Fluxo</th>
+        <th style="text-align:right">Inscritos</th>
+        <th style="text-align:right">Respostas</th>
+        <th style="text-align:right">Destravar Objeção</th>
+        <th style="text-align:right">Necessita Atenção</th>
+      </tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px"></span>${r.name}</td>
+        <td style="text-align:right">${r.inscritos > 0 ? fmtInt(r.inscritos) : '—'}</td>
+        <td style="text-align:right">${fmtInt(r.respostas)}</td>
+        <td style="text-align:right">${fmtInt(r.destravar)}</td>
+        <td style="text-align:right">${fmtInt(r.necessita)}</td>
+      </tr>`).join('')}</tbody>`;
+
+    // Rankings: por Inscritos e por Respostas
+    const byInsc = [...rows].sort((a,b) => b.inscritos - a.inscritos);
+    const byResp = [...rows].sort((a,b) => b.respostas - a.respostas);
+    const maxInsc = byInsc[0]?.inscritos || 1;
+    const maxResp = byResp[0]?.respostas || 1;
+
+    const bestEl = document.getElementById('rank-best-' + key);
+    const worstEl = document.getElementById('rank-worst-' + key);
+    const bestEffEl = document.getElementById('rank-best-eff-' + key);
+    const worstEffEl = document.getElementById('rank-worst-eff-' + key);
+
+    if (bestEl) {
+      bestEl.innerHTML = byInsc.slice(0,5).map((r,i) => rankRow(i+1, r.name, fmtInt(r.inscritos), r.inscritos/maxInsc, color)).join('');
+      bestEl.closest('.card')?.querySelector('.card-title') && (bestEl.closest('.card').querySelector('.card-title').textContent = 'Top 5 · por Inscritos');
+    }
+    if (worstEl) {
+      worstEl.innerHTML = byResp.slice(0,5).map((r,i) => rankRow(i+1, r.name, fmtInt(r.respostas), r.respostas/maxResp, color)).join('');
+      worstEl.closest('.card')?.querySelector('.card-title') && (worstEl.closest('.card').querySelector('.card-title').textContent = 'Top 5 · por Respostas');
+    }
+    if (bestEffEl) {
+      bestEffEl.innerHTML = byInsc.slice(0,5).map((r,i) => rankRow(i+1, r.name, fmtInt(r.inscritos), r.inscritos/maxInsc, color)).join('');
+      bestEffEl.closest('.card')?.querySelector('.card-title') && (bestEffEl.closest('.card').querySelector('.card-title').textContent = 'Top 5 · por Destravar Objeção');
+      const byDest = [...rows].sort((a,b) => b.destravar - a.destravar);
+      const maxDest = byDest[0]?.destravar || 1;
+      bestEffEl.innerHTML = byDest.slice(0,5).map((r,i) => rankRow(i+1, r.name, fmtInt(r.destravar), r.destravar/maxDest, color)).join('');
+    }
+    if (worstEffEl?.closest('.card')) worstEffEl.closest('.card').style.display = 'none';
+  }
+}
+
+function renderWppFlowUnknown(unknownRows) {
+  const page = document.getElementById('page-wf');
+  if (!page) return;
+  const old = page.querySelector('#wpp-flow-unknown-alert');
+  if (old) old.remove();
+  if (!unknownRows || unknownRows.length === 0) return;
+
+  const el = document.createElement('div');
+  el.id = 'wpp-flow-unknown-alert';
+  el.style.marginTop = '16px';
+  el.innerHTML = `
+    <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:16px">
+      <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:10px">
+        ⚠ Valores não mapeados · ${unknownRows.length} item(s) encontrado(s)
+      </div>
+      <div style="font-size:11px;color:#78350f;margin-bottom:10px">
+        Esses valores apareceram no sistema mas ainda não têm um fluxo configurado.
+        Informe o time técnico para atualizar o mapeamento.
+      </div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:left;padding:4px 8px;color:#92400e">Origem</th>
+          <th style="text-align:left;padding:4px 8px;color:#92400e">Valor</th>
+          <th style="text-align:right;padding:4px 8px;color:#92400e">Ocorrências</th>
+        </tr></thead>
+        <tbody>
+          ${unknownRows.map(r => `<tr>
+            <td style="padding:4px 8px;color:#78350f">${r.source === 'alia_campanha' ? 'Alia Campanha (CSV)' : 'Origem (leads)'}</td>
+            <td style="padding:4px 8px;color:#78350f;font-family:monospace">${r.value}</td>
+            <td style="text-align:right;padding:4px 8px;color:#78350f">${r.occurrences}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  page.appendChild(el);
 }
 
 function rankRow(n,name,val,pct,color){
