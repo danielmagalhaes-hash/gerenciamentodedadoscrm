@@ -1348,8 +1348,8 @@ async function fetchWppFlowRevenue(start, end) {
     .gte('data', start).lte('data', end);
   return data || [];
 }
-async function fetchWppFlowUnknown() {
-  const { data } = await _sb.from('vw_wpp_flow_unknown').select('source,value,occurrences');
+async function fetchWppFlowUtmPending() {
+  const { data } = await _sb.from('vw_wpp_flow_utm_pending').select('source_type,key_value,flow_name');
   return data || [];
 }
 
@@ -1867,7 +1867,7 @@ async function renderChannel(key){
   let emailDaily = [], emailAssetRows = [], flowItemsMap = {}, inscritos = 0;
   let emailFlowItemRows = [], communityDaily = [], communityMsgRows = [];
   let em001ByDay = {};
-  let wppInscritosByFlow = [], wppLeadsRows = [], wppRevRows = [], wppUnknownRows = [];
+  let wppInscritosByFlow = [], wppLeadsRows = [], wppRevRows = [], wppPendingRows = [];
   try {
     const fetches = [
       fetchChannelData(start, end),
@@ -1890,7 +1890,7 @@ async function renderChannel(key){
     if (key === 'wf') {
       fetches.push(fetchWppFlowLeads(start, end));
       fetches.push(fetchWppFlowRevenue(start, end));
-      fetches.push(fetchWppFlowUnknown());
+      fetches.push(fetchWppFlowUtmPending());
     }
     const results = await Promise.all(fetches);
     allRows = results[0]; revByType = results[1];
@@ -1911,7 +1911,7 @@ async function renderChannel(key){
       for (const r of (results[7].data || [])) em001ByDay[(r.data||'').slice(0,10)] = +r.sends || 0;
     }
     if (isCommunity) { communityDaily = results[4] || []; communityMsgRows = results[5] || []; }
-    if (key === 'wf') { wppLeadsRows = results[4] || []; wppRevRows = results[5] || []; wppUnknownRows = results[6] || []; }
+    if (key === 'wf') { wppLeadsRows = results[4] || []; wppRevRows = results[5] || []; wppPendingRows = results[6] || []; }
   } catch(err) {
     document.getElementById('kpi-'+key).innerHTML =
       `<div style="grid-column:1/-1;color:var(--danger);padding:20px">Erro ao carregar: ${err.message}</div>`;
@@ -2075,14 +2075,6 @@ async function renderChannel(key){
       <div class="kpi-deltas">${k.delta||''}<span class="delta-label">${dlabel(start)} → ${dlabel(end)}</span></div>
     </div>`).join('');
 
-  // Aviso de dados fictícios — WPP (Vekta sem integração)
-  if(isWpp){
-    const notice = document.createElement('div');
-    notice.style.cssText = 'background:#fef3c7;border:1px solid #d97706;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#92400e;';
-    notice.innerHTML = '⚠️ <strong>Dados parcialmente fictícios:</strong> apenas a <strong>receita</strong> é real (atribuição UTM). Disparos, sessões e rankings são estimativas aguardando integração com Vekta e Sendflow.';
-    const page = document.getElementById('page-'+key);
-    if(page) page.insertBefore(notice, page.firstChild);
-  }
 
   renderFunnel('funnel-'+key, s);
 
@@ -2358,7 +2350,7 @@ async function renderChannel(key){
   } else if(key === 'wf') {
     // WPP Fluxo — dados reais do banco
     renderWppFlowTable(key, wppLeadsRows, wppRevRows, ch.color);
-    renderWppFlowUnknown(wppUnknownRows);
+    renderWppFlowUtmPanel(wppPendingRows);
   } else if(!isEmail){
     // WPP Campanha — mock (Vekta sem integração)
     const assets = ASSETS[key];
@@ -2472,41 +2464,146 @@ function renderWppFlowTable(key, leadsRows, revRows, color) {
   [worstEl, worstEffEl].forEach(el => { if (el?.closest('.card')) el.closest('.card').style.display = 'none'; });
 }
 
-function renderWppFlowUnknown(unknownRows) {
+// =========================================
+// CONFIGURAÇÃO DE UTM — WPP Fluxo
+// =========================================
+function renderWppFlowUtmPanel(pendingRows) {
   const page = document.getElementById('page-wf');
   if (!page) return;
-  const old = page.querySelector('#wpp-flow-unknown-alert');
+  const old = page.querySelector('#wpp-utm-panel');
   if (old) old.remove();
-  if (!unknownRows || unknownRows.length === 0) return;
+  if (!pendingRows || pendingRows.length === 0) return;
+
+  // Agrupa alia_campanha por flow_name (ou individualmente se flow_name nulo)
+  const aliaGroups = {};
+  for (const r of pendingRows.filter(r => r.source_type === 'alia_campanha')) {
+    const gk = r.flow_name || `\x00${r.key_value}`;
+    if (!aliaGroups[gk]) aliaGroups[gk] = { flow_name: r.flow_name, keys: [] };
+    aliaGroups[gk].keys.push(r.key_value);
+  }
+  const origemRows = pendingRows.filter(r => r.source_type === 'origem');
+
+  let rowIdx = 0;
+
+  const makeRow = (idx, label, sourceType, keyValues, existingFlowName) => {
+    const needsName = !existingFlowName;
+    const nameInput = needsName
+      ? `<input id="wpp-name-${idx}" type="text" placeholder="Nome do fluxo"
+           style="flex:2;min-width:130px;font-size:12px;padding:5px 8px;border:1px solid #f59e0b;border-radius:4px;outline:none">`
+      : `<span style="font-size:12px;color:#78350f;min-width:130px;flex:2">${existingFlowName}</span>`;
+    return `
+      <div id="wpp-utm-row-${idx}" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+        <span style="font-size:12px;color:#78350f;min-width:160px;flex:2;font-family:monospace">${label}</span>
+        ${nameInput}
+        <span style="font-size:11px;color:#92400e;white-space:nowrap">utm_campaign:</span>
+        <input id="wpp-utm-${idx}" type="text" placeholder="ex: welcome"
+          style="flex:2;min-width:120px;font-size:12px;padding:5px 8px;border:1px solid #f59e0b;border-radius:4px;outline:none"
+          data-source="${sourceType}"
+          data-keys="${JSON.stringify(keyValues).replace(/"/g,'&quot;')}"
+          data-flowname="${(existingFlowName||'').replace(/"/g,'&quot;')}"
+          data-needsname="${needsName}" />
+        <button onclick="saveWppUtmConfig(${idx})"
+          style="background:#f59e0b;color:#fff;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">
+          Salvar
+        </button>
+        <button onclick="ignoreWppUtm(${idx})"
+          style="background:none;color:#92400e;border:1px solid #f59e0b;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap">
+          Ignorar
+        </button>
+        <span id="wpp-utm-status-${idx}" style="font-size:11px;color:#78350f"></span>
+      </div>`;
+  };
+
+  const aliaHtml = Object.entries(aliaGroups).map(([gk, g]) => {
+    const label = g.flow_name ? `${g.flow_name} (${g.keys.length} Alia Campanha)` : g.keys[0];
+    return makeRow(rowIdx++, label, 'alia_campanha', g.keys, g.flow_name);
+  }).join('');
+
+  const origemHtml = origemRows.map(r => makeRow(rowIdx++, r.key_value, 'origem', [r.key_value], r.flow_name)).join('');
+
+  const secAlia = aliaHtml ? `
+    <div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:8px">
+      Alia Campanha sem utm_campaign · ${Object.keys(aliaGroups).length} grupo(s)
+    </div>${aliaHtml}` : '';
+
+  const secOrigem = origemHtml ? `
+    <div style="font-size:12px;font-weight:600;color:#92400e;margin:${aliaHtml?'14px':'0'} 0 8px">
+      Origem (leads) sem utm_campaign · ${origemRows.length} item(s)
+    </div>${origemHtml}` : '';
 
   const el = document.createElement('div');
-  el.id = 'wpp-flow-unknown-alert';
+  el.id = 'wpp-utm-panel';
   el.style.marginTop = '16px';
   el.innerHTML = `
-    <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:16px">
-      <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:10px">
-        ⚠ Valores não mapeados · ${unknownRows.length} item(s) encontrado(s)
-      </div>
-      <div style="font-size:11px;color:#78350f;margin-bottom:10px">
-        Esses valores apareceram no sistema mas ainda não têm um fluxo configurado.
-        Informe o time técnico para atualizar o mapeamento.
-      </div>
-      <table style="width:100%;font-size:12px;border-collapse:collapse">
-        <thead><tr>
-          <th style="text-align:left;padding:4px 8px;color:#92400e">Origem</th>
-          <th style="text-align:left;padding:4px 8px;color:#92400e">Valor</th>
-          <th style="text-align:right;padding:4px 8px;color:#92400e">Ocorrências</th>
-        </tr></thead>
-        <tbody>
-          ${unknownRows.map(r => `<tr>
-            <td style="padding:4px 8px;color:#78350f">${r.source === 'alia_campanha' ? 'Alia Campanha (CSV)' : 'Origem (leads)'}</td>
-            <td style="padding:4px 8px;color:#78350f;font-family:monospace">${r.value}</td>
-            <td style="text-align:right;padding:4px 8px;color:#78350f">${r.occurrences}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
+    <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:16px">
+      <div style="font-weight:600;color:#92400e;margin-bottom:12px">&#9888; Configuração de UTM necessária · WPP Fluxo</div>
+      ${secAlia}${secOrigem}
     </div>`;
   page.appendChild(el);
+}
+
+async function saveWppUtmConfig(i) {
+  const utmInput  = document.getElementById('wpp-utm-' + i);
+  const status    = document.getElementById('wpp-utm-status-' + i);
+  const row       = document.getElementById('wpp-utm-row-' + i);
+  const btn       = row?.querySelector('button');
+
+  const sourceType   = utmInput?.dataset?.source || '';
+  const keyValues    = JSON.parse(utmInput?.dataset?.keys?.replace(/&quot;/g, '"') || '[]');
+  const needsName    = utmInput?.dataset?.needsname === 'true';
+  const utmCampaign  = (utmInput?.value || '').trim();
+
+  let flowName = utmInput?.dataset?.flowname || '';
+  if (needsName) {
+    const nameInput = document.getElementById('wpp-name-' + i);
+    flowName = (nameInput?.value || '').trim();
+    if (!flowName) { if (status) status.textContent = 'Preencha o nome do fluxo.'; return; }
+  }
+  if (!utmCampaign) { if (status) status.textContent = 'Preencha o utm_campaign.'; return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  if (status) status.textContent = '';
+
+  try {
+    const resp = await fetch('/admin/wpp-utm-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_type: sourceType, key_values: keyValues, flow_name: flowName || null, utm_campaign: utmCampaign, is_ignored: false }),
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(json.error || resp.statusText);
+    if (utmInput) { utmInput.disabled = true; utmInput.style.borderColor = '#10b981'; }
+    const nameInp = document.getElementById('wpp-name-' + i);
+    if (nameInp) { nameInp.disabled = true; }
+    if (btn) btn.style.display = 'none';
+    row?.querySelectorAll('button').forEach(b => b.style.display = 'none');
+    if (status) { status.textContent = '✓ Salvo'; status.style.color = '#047857'; }
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; }
+    if (status) { status.textContent = 'Erro: ' + err.message; status.style.color = '#dc2626'; }
+  }
+}
+
+async function ignoreWppUtm(i) {
+  const utmInput  = document.getElementById('wpp-utm-' + i);
+  const status    = document.getElementById('wpp-utm-status-' + i);
+  const row       = document.getElementById('wpp-utm-row-' + i);
+  const sourceType = utmInput?.dataset?.source || '';
+  const keyValues  = JSON.parse(utmInput?.dataset?.keys?.replace(/&quot;/g, '"') || '[]');
+
+  try {
+    const resp = await fetch('/admin/wpp-utm-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_type: sourceType, key_values: keyValues, is_ignored: true }),
+    });
+    if (!resp.ok) throw new Error((await resp.json().catch(()=>({}))).error || resp.statusText);
+    row?.querySelectorAll('button').forEach(b => b.style.display = 'none');
+    if (utmInput) utmInput.disabled = true;
+    if (status) { status.textContent = '✓ Ignorado'; status.style.color = '#6b7280'; }
+  } catch (err) {
+    if (status) { status.textContent = 'Erro: ' + err.message; status.style.color = '#dc2626'; }
+  }
 }
 
 function rankRow(n,name,val,pct,color){

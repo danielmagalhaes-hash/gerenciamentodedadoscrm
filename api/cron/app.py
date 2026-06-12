@@ -377,6 +377,52 @@ def admin_utm_config():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/admin/wpp-utm-config', methods=['POST'])
+def admin_wpp_utm_config():
+    """Grava ou atualiza mapeamento UTM de WPP Fluxo.
+    Body JSON: {
+      "source_type": "alia_campanha" | "origem",
+      "key_values": ["..."],   // lista de chaves a atualizar (agrupa vários alia_campanha do mesmo fluxo)
+      "flow_name": "...",      // opcional — nome de exibição do fluxo
+      "utm_campaign": "...",   // slug utm_campaign para atribuição de receita
+      "is_ignored": false      // true para ignorar este valor
+    }
+    """
+    data         = request.get_json() or {}
+    source_type  = (data.get('source_type', '') or '').strip()
+    key_values   = [str(v).strip() for v in (data.get('key_values') or []) if str(v).strip()]
+    flow_name    = (data.get('flow_name',    '') or '').strip() or None
+    utm_campaign = (data.get('utm_campaign', '') or '').strip() or None
+    is_ignored   = bool(data.get('is_ignored', False))
+
+    if source_type not in ('alia_campanha', 'origem'):
+        return jsonify({'error': f"source_type inválido: '{source_type}'"}), 400
+    if not key_values:
+        return jsonify({'error': 'key_values é obrigatório e não pode ser vazio'}), 400
+
+    try:
+        from supabase import create_client as _sb_admin
+        sb = _sb_admin(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_ROLE_KEY'])
+
+        if source_type == 'alia_campanha':
+            records = [
+                {'alia_campanha': kv, 'flow_name': flow_name, 'utm_campaign': utm_campaign, 'is_ignored': is_ignored}
+                for kv in key_values
+            ]
+            sb.table('dim_wpp_alia_campanha_mapping').upsert(records, on_conflict='alia_campanha').execute()
+        else:
+            records = [
+                {'origem': kv, 'flow_name': flow_name, 'utm_campaign': utm_campaign, 'is_ignored': is_ignored}
+                for kv in key_values
+            ]
+            sb.table('dim_wpp_origem_mapping').upsert(records, on_conflict='origem').execute()
+
+        return jsonify({'status': 'ok', 'source_type': source_type, 'updated': len(key_values)})
+    except Exception as e:
+        logger.error({'event': 'wpp_utm_config_failed', 'source_type': source_type, 'key_values': key_values, 'error': str(e)})
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/cron/forms', methods=['GET'])
 def forms():
     if not _authorized():
