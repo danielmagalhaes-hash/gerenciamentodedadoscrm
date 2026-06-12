@@ -1,5 +1,6 @@
 """Exporta leads_webhook do Supabase para Google Sheets (atualização horária)."""
 
+import json
 import logging
 import os
 
@@ -16,9 +17,17 @@ HEADERS = ["Data", "Telefone", "Origem", "Funil", "Vendedor"]
 
 
 def _get_worksheet() -> gspread.Worksheet:
-    json_path = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON_PATH"]
     spreadsheet_id = os.environ["GOOGLE_SHEETS_LEADS_SPREADSHEET_ID"]
-    gc = gspread.service_account(filename=json_path)
+
+    # Vercel: conteúdo do JSON como variável de ambiente
+    # Local: caminho para o arquivo JSON
+    json_env = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if json_env:
+        gc = gspread.service_account_from_dict(json.loads(json_env))
+    else:
+        json_path = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON_PATH"]
+        gc = gspread.service_account(filename=json_path)
+
     return gc.open_by_key(spreadsheet_id).get_worksheet(0)
 
 
