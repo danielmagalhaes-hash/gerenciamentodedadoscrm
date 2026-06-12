@@ -19,33 +19,50 @@ logger = logging.getLogger(__name__)
 _BASE_URL = "https://sendflow.pro/sendapi"
 _ACTIONS_THROTTLE_S = 11  # API exige ≥10s entre chamadas de listagem de ações
 _MAX_PAGES = 10            # teto da API: 1000 ações por paginação (10 × 100)
+_RETRY_DELAYS_S = [3, 7, 15]  # aguarda antes de cada retentativa (403/429/5xx)
 
 
 def _headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {os.environ['SENDFLOW_API_KEY']}"}
 
 
+def _get(client: httpx.Client, url: str, **kwargs) -> httpx.Response:
+    """GET com retry automático em 403/429/5xx (erros transientes do Sendflow)."""
+    transient = {403, 429, 500, 502, 503, 504}
+    for attempt, delay in enumerate(_RETRY_DELAYS_S + [None]):
+        resp = client.get(url, **kwargs)
+        if resp.status_code not in transient or delay is None:
+            resp.raise_for_status()
+            return resp
+        logger.warning({
+            "event": "sendflow_retry",
+            "url": url,
+            "status": resp.status_code,
+            "attempt": attempt + 1,
+            "wait_s": delay,
+        })
+        time.sleep(delay)
+    raise RuntimeError("unreachable")  # satisfaz type checker
+
+
 def fetch_releases() -> list[SendflowRelease]:
     """Retorna todas as releases (campanhas de comunidade) da conta."""
     with httpx.Client(headers=_headers(), timeout=30) as client:
-        resp = client.get(f"{_BASE_URL}/releases")
-        resp.raise_for_status()
+        resp = _get(client, f"{_BASE_URL}/releases")
         return [SendflowRelease.model_validate(r) for r in resp.json()]
 
 
 def fetch_release_groups(release_id: str) -> list[SendflowGroup]:
     """Retorna grupos vinculados a uma release com contagem atual de membros."""
     with httpx.Client(headers=_headers(), timeout=30) as client:
-        resp = client.get(f"{_BASE_URL}/releases/{release_id}/groups")
-        resp.raise_for_status()
+        resp = _get(client, f"{_BASE_URL}/releases/{release_id}/groups")
         return [SendflowGroup.model_validate(g) for g in resp.json()]
 
 
 def fetch_release_analytics(release_id: str) -> SendflowAnalytics:
     """Retorna analytics históricos (add/remove/clicks por data) de uma release."""
     with httpx.Client(headers=_headers(), timeout=30) as client:
-        resp = client.get(f"{_BASE_URL}/releases/{release_id}/analytics")
-        resp.raise_for_status()
+        resp = _get(client, f"{_BASE_URL}/releases/{release_id}/analytics")
         return SendflowAnalytics.model_validate(resp.json())
 
 
@@ -73,13 +90,22 @@ def fetch_release_actions(
             if cursor:
                 params["cursor"] = cursor
 
-            resp = client.get(f"{_BASE_URL}/actions", params=params)
-            resp.raise_for_status()
+            resp = _get(client, f"{_BASE_URL}/actions", params=params)
             data = resp.json()
 
             page_actions = data.get("actions", [])
             for item in page_actions:
                 action = SendflowAction.model_validate(item)
+
+                logger.debug({
+                    "event": "sendflow_action_raw",
+                    "release_id": release_id,
+                    "action_id": action.id,
+                    "type": action.type,
+                    "processed": action.processed,
+                    "success": action.success,
+                    "action_date": action.created_at.date().isoformat(),
+                })
 
                 # Filtra somente disparos processados com sucesso
                 if action.type != "sendMessages" or not action.processed:

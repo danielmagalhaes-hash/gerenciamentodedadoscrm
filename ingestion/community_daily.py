@@ -87,12 +87,13 @@ def run_for_period(
             )
             total_analytics += count
         except Exception as e:
-            logger.error({
+            # Erro na release não interrompe as demais (retry já foi tentado no cliente).
+            logger.warning({
                 "event": "community_analytics_error",
                 "release_id": release.id,
                 "error": str(e),
             })
-            raise
+            continue
 
         # Ações de disparo no período
         if not release.archived:
@@ -105,12 +106,13 @@ def run_for_period(
                 )
                 total_actions += count
             except Exception as e:
-                logger.error({
+                # 403 ou qualquer erro na API de ações não derruba o cron:
+                # analytics e outras releases continuam sendo processadas.
+                logger.warning({
                     "event": "community_actions_error",
                     "release_id": release.id,
                     "error": str(e),
                 })
-                raise
 
     logger.info({
         "event": "community_run_done",
