@@ -323,6 +323,7 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
       <option value="mtd">MTD (Mês até hoje)</option>
       <option value="prev">Mês anterior</option>
       <option value="30d">Últimos 30 dias</option>
+      <option value="all">Histórico completo</option>
       <option value="custom">Datas personalizadas</option>
     </select>
   </div>
@@ -958,6 +959,7 @@ function getDateRange(period) {
   if (period === 'd1') { const y=new Date(t); y.setDate(y.getDate()-1); return {start:isoDate(y),end:isoDate(y)}; }
   if (period === '7d') { const s=new Date(t); s.setDate(s.getDate()-6); return {start:isoDate(s),end:isoDate(t)}; }
   if (period === 'mtd') { return {start:`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-01`,end:isoDate(t)}; }
+  if (period === 'all') { return {start:'2026-01-01',end:isoDate(t)}; }
   if (period === 'prev') {
     const s=new Date(t.getFullYear(),t.getMonth()-1,1), e=new Date(t.getFullYear(),t.getMonth(),0);
     return {start:isoDate(s),end:isoDate(e)};
