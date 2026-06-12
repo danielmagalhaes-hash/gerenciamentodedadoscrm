@@ -1342,6 +1342,12 @@ async function fetchWppFlowLeads(start, end) {
     .gte('data', start).lte('data', end);
   return data || [];
 }
+async function fetchWppFlowRevenue(start, end) {
+  const { data } = await _sb.from('vw_wpp_flow_revenue')
+    .select('flow_name,data,orders,revenue_brl')
+    .gte('data', start).lte('data', end);
+  return data || [];
+}
 async function fetchWppFlowUnknown() {
   const { data } = await _sb.from('vw_wpp_flow_unknown').select('source,value,occurrences');
   return data || [];
@@ -1861,7 +1867,7 @@ async function renderChannel(key){
   let emailDaily = [], emailAssetRows = [], flowItemsMap = {}, inscritos = 0;
   let emailFlowItemRows = [], communityDaily = [], communityMsgRows = [];
   let em001ByDay = {};
-  let wppInscritosByFlow = [], wppLeadsRows = [], wppUnknownRows = [];
+  let wppInscritosByFlow = [], wppLeadsRows = [], wppRevRows = [], wppUnknownRows = [];
   try {
     const fetches = [
       fetchChannelData(start, end),
@@ -1883,6 +1889,7 @@ async function renderChannel(key){
     }
     if (key === 'wf') {
       fetches.push(fetchWppFlowLeads(start, end));
+      fetches.push(fetchWppFlowRevenue(start, end));
       fetches.push(fetchWppFlowUnknown());
     }
     const results = await Promise.all(fetches);
@@ -1904,7 +1911,7 @@ async function renderChannel(key){
       for (const r of (results[7].data || [])) em001ByDay[(r.data||'').slice(0,10)] = +r.sends || 0;
     }
     if (isCommunity) { communityDaily = results[4] || []; communityMsgRows = results[5] || []; }
-    if (key === 'wf') { wppLeadsRows = results[4] || []; wppUnknownRows = results[5] || []; }
+    if (key === 'wf') { wppLeadsRows = results[4] || []; wppRevRows = results[5] || []; wppUnknownRows = results[6] || []; }
   } catch(err) {
     document.getElementById('kpi-'+key).innerHTML =
       `<div style="grid-column:1/-1;color:var(--danger);padding:20px">Erro ao carregar: ${err.message}</div>`;
@@ -2350,7 +2357,7 @@ async function renderChannel(key){
     renderCommunityMessageRanking(key, communityMsgRows);
   } else if(key === 'wf') {
     // WPP Fluxo — dados reais do banco
-    renderWppFlowTable(key, wppLeadsRows, ch.color);
+    renderWppFlowTable(key, wppLeadsRows, wppRevRows, ch.color);
     renderWppFlowUnknown(wppUnknownRows);
   } else if(!isEmail){
     // WPP Campanha — mock (Vekta sem integração)
@@ -2380,74 +2387,89 @@ async function renderChannel(key){
   }
 }
 
-function renderWppFlowTable(key, leadsRows, color) {
+function renderWppFlowTable(key, leadsRows, revRows, color) {
   const leadsMap = {};
   for (const r of leadsRows) {
-    if (!leadsMap[r.flow_name]) leadsMap[r.flow_name] = {disparos:0, respostas:0, destravar_objecao:0, necessita_atencao:0};
-    leadsMap[r.flow_name].disparos          += +r.total_leads || 0;
-    leadsMap[r.flow_name].respostas         += +r.respostas || 0;
-    leadsMap[r.flow_name].destravar_objecao += +r.destravar_objecao || 0;
-    leadsMap[r.flow_name].necessita_atencao += +r.necessita_atencao || 0;
+    if (!leadsMap[r.flow_name]) leadsMap[r.flow_name] = {disparos:0, respostas:0, destravar:0, necessita:0};
+    leadsMap[r.flow_name].disparos  += +r.total_leads || 0;
+    leadsMap[r.flow_name].respostas += +r.respostas || 0;
+    leadsMap[r.flow_name].destravar += +r.destravar_objecao || 0;
+    leadsMap[r.flow_name].necessita += +r.necessita_atencao || 0;
+  }
+  const revMap = {};
+  for (const r of revRows) {
+    if (!revMap[r.flow_name]) revMap[r.flow_name] = {orders:0, revenue:0};
+    revMap[r.flow_name].orders  += +r.orders || 0;
+    revMap[r.flow_name].revenue += parseFloat(r.revenue_brl) || 0;
   }
 
-  const allFlows = Object.keys(leadsMap).sort();
+  const allFlows = [...new Set([...Object.keys(leadsMap), ...Object.keys(revMap)])].sort();
 
   if (allFlows.length === 0) {
     document.getElementById('table-asset-' + key).innerHTML =
-      '<tr><td colspan="5" style="color:var(--muted);padding:16px;text-align:center">Sem dados no período.</td></tr>';
-  } else {
-    const rows = allFlows.map(f => ({
-      name:     f,
-      disparos: leadsMap[f].disparos,
-      respostas: leadsMap[f].respostas,
-      destravar: leadsMap[f].destravar_objecao,
-      necessita: leadsMap[f].necessita_atencao,
-    }));
-    document.getElementById('table-asset-' + key).innerHTML = `
-      <thead><tr>
-        <th>Fluxo</th>
-        <th style="text-align:right">Disparos</th>
-        <th style="text-align:right">Respostas</th>
-        <th style="text-align:right">Destravar Objeção</th>
-        <th style="text-align:right">Necessita Atenção</th>
-      </tr></thead>
-      <tbody>${rows.map(r => `<tr>
-        <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px"></span>${r.name}</td>
-        <td style="text-align:right">${r.disparos > 0 ? fmtInt(r.disparos) : '—'}</td>
-        <td style="text-align:right">${fmtInt(r.respostas)}</td>
-        <td style="text-align:right">${fmtInt(r.destravar)}</td>
-        <td style="text-align:right">${fmtInt(r.necessita)}</td>
-      </tr>`).join('')}</tbody>`;
-
-    const byDisp = [...rows].sort((a,b) => b.disparos - a.disparos);
-    const byResp = [...rows].sort((a,b) => b.respostas - a.respostas);
-    const byDest = [...rows].sort((a,b) => b.destravar - a.destravar);
-    const maxDisp = byDisp[0]?.disparos || 1;
-    const maxResp = byResp[0]?.respostas || 1;
-    const maxDest = byDest[0]?.destravar || 1;
-
-    const bestEl    = document.getElementById('rank-best-' + key);
-    const worstEl   = document.getElementById('rank-worst-' + key);
-    const bestEffEl = document.getElementById('rank-best-eff-' + key);
-    const worstEffEl = document.getElementById('rank-worst-eff-' + key);
-
-    if (bestEl) {
-      bestEl.innerHTML = byDisp.slice(0,5).map((r,i) => rankRow(i+1, r.name, fmtInt(r.disparos), r.disparos/maxDisp, color)).join('');
-      const t = bestEl.closest('.card')?.querySelector('.card-title');
-      if (t) t.textContent = 'Top 5 · por Disparos';
-    }
-    if (worstEl) {
-      worstEl.innerHTML = byResp.slice(0,5).map((r,i) => rankRow(i+1, r.name, fmtInt(r.respostas), r.respostas/maxResp, color)).join('');
-      const t = worstEl.closest('.card')?.querySelector('.card-title');
-      if (t) t.textContent = 'Top 5 · por Respostas';
-    }
-    if (bestEffEl) {
-      bestEffEl.innerHTML = byDest.slice(0,5).map((r,i) => rankRow(i+1, r.name, fmtInt(r.destravar), r.destravar/maxDest, color)).join('');
-      const t = bestEffEl.closest('.card')?.querySelector('.card-title');
-      if (t) t.textContent = 'Top 5 · por Destravar Objeção';
-    }
-    if (worstEffEl?.closest('.card')) worstEffEl.closest('.card').style.display = 'none';
+      '<tr><td colspan="9" style="color:var(--muted);padding:16px;text-align:center">Sem dados no período.</td></tr>';
+    return;
   }
+
+  const rows = allFlows.map(f => {
+    const l = leadsMap[f] || {disparos:0, respostas:0, destravar:0, necessita:0};
+    const rv = revMap[f]  || {orders:0, revenue:0};
+    const taxaResp  = l.disparos  > 0 ? l.respostas / l.disparos  : null;
+    const convVenda = l.respostas > 0 ? rv.orders   / l.respostas : null;
+    const revPerDisp = l.disparos > 0 ? rv.revenue  / l.disparos  : null;
+    return { name:f, ...l, ...rv, taxaResp, convVenda, revPerDisp };
+  });
+
+  document.getElementById('table-asset-' + key).innerHTML = `
+    <thead><tr>
+      <th>Fluxo</th>
+      <th style="text-align:right">Disparos</th>
+      <th style="text-align:right">Respostas</th>
+      <th style="text-align:right">Taxa Resp.</th>
+      <th style="text-align:right">Destravar Obj.</th>
+      <th style="text-align:right">Nec. Atenção</th>
+      <th style="text-align:right">Conv. Resp.→Venda</th>
+      <th style="text-align:right">Receita</th>
+      <th style="text-align:right">Receita/Disparo</th>
+    </tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px"></span>${r.name}</td>
+      <td style="text-align:right">${r.disparos > 0 ? fmtInt(r.disparos) : '—'}</td>
+      <td style="text-align:right">${fmtInt(r.respostas)}</td>
+      <td style="text-align:right">${r.taxaResp !== null ? fmtPct1(r.taxaResp) : '—'}</td>
+      <td style="text-align:right">${fmtInt(r.destravar)}</td>
+      <td style="text-align:right">${fmtInt(r.necessita)}</td>
+      <td style="text-align:right">${r.convVenda !== null ? fmtPct1(r.convVenda) : '—'}</td>
+      <td style="text-align:right">${r.revenue > 0 ? fmtBRLfull(r.revenue) : '—'}</td>
+      <td style="text-align:right">${r.revPerDisp !== null ? fmtBRL2(r.revPerDisp) : '—'}</td>
+    </tr>`).join('')}</tbody>`;
+
+  // Rankings: apenas Top Receita e Top Receita/Disparo
+  const byRev     = [...rows].filter(r => r.revenue > 0).sort((a,b) => b.revenue - a.revenue);
+  const byRevDisp = [...rows].filter(r => r.revPerDisp !== null).sort((a,b) => b.revPerDisp - a.revPerDisp);
+  const maxRev     = byRev[0]?.revenue    || 1;
+  const maxRevDisp = byRevDisp[0]?.revPerDisp || 1;
+
+  const bestEl     = document.getElementById('rank-best-' + key);
+  const worstEl    = document.getElementById('rank-worst-' + key);
+  const bestEffEl  = document.getElementById('rank-best-eff-' + key);
+  const worstEffEl = document.getElementById('rank-worst-eff-' + key);
+
+  if (bestEl) {
+    bestEl.innerHTML = byRev.slice(0,5).map((r,i) => rankRow(i+1, r.name, fmtBRLfull(r.revenue), r.revenue/maxRev, color)).join('') || '<div style="color:var(--muted);font-size:12px;padding:8px">Sem receita atribuída no período.</div>';
+    const t = bestEl.closest('.card')?.querySelector('.card-title');
+    if (t) t.textContent = 'Top 5 · Receita';
+  }
+  // Move bestEffEl para mesma linha que bestEl, oculta worstEl e worstEffEl
+  if (bestEffEl) {
+    bestEffEl.innerHTML = byRevDisp.slice(0,5).map((r,i) => rankRow(i+1, r.name, fmtBRL2(r.revPerDisp), r.revPerDisp/maxRevDisp, color)).join('') || '<div style="color:var(--muted);font-size:12px;padding:8px">Sem receita atribuída no período.</div>';
+    const t = bestEffEl.closest('.card')?.querySelector('.card-title');
+    if (t) t.textContent = 'Top 5 · Receita / Disparo';
+    const bestCard    = bestEl?.closest('.card');
+    const bestEffCard = bestEffEl?.closest('.card');
+    if (bestCard && bestEffCard) bestCard.parentElement?.appendChild(bestEffCard);
+  }
+  [worstEl, worstEffEl].forEach(el => { if (el?.closest('.card')) el.closest('.card').style.display = 'none'; });
 }
 
 function renderWppFlowUnknown(unknownRows) {
