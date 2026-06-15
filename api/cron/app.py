@@ -423,6 +423,45 @@ def admin_wpp_utm_config():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/admin/monthly-goals', methods=['POST'])
+def admin_monthly_goals():
+    """Grava ou atualiza metas mensais em fact_monthly_goals.
+    Body JSON: {
+      "month": "YYYY-MM-DD",          // primeiro dia do mês
+      "goal_total_brl": 100000,
+      "goal_email_flow_brl": 40000,   // opcional
+      "goal_email_campaign_brl": ..., // opcional
+      "goal_wpp_flow_brl": ...,       // opcional
+      "goal_wpp_campaign_brl": ...,   // opcional
+      "goal_community_brl": ...       // opcional
+    }
+    """
+    data  = request.get_json() or {}
+    month = (data.get('month', '') or '').strip()
+    if not month:
+        return jsonify({'error': 'month é obrigatório (formato YYYY-MM-DD)'}), 400
+
+    goal_total = data.get('goal_total_brl')
+    if goal_total is None:
+        return jsonify({'error': 'goal_total_brl é obrigatório'}), 400
+
+    record: dict = {'month': month, 'goal_total_brl': float(goal_total)}
+    for field in ('goal_email_flow_brl', 'goal_email_campaign_brl',
+                  'goal_wpp_flow_brl', 'goal_wpp_campaign_brl', 'goal_community_brl'):
+        val = data.get(field)
+        if val is not None:
+            record[field] = float(val)
+
+    try:
+        from supabase import create_client as _sb_admin
+        sb = _sb_admin(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_ROLE_KEY'])
+        sb.table('fact_monthly_goals').upsert(record, on_conflict='month').execute()
+        return jsonify({'status': 'ok', 'month': month})
+    except Exception as e:
+        logger.error({'event': 'monthly_goals_failed', 'month': month, 'error': str(e)})
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/cron/forms', methods=['GET'])
 def forms():
     if not _authorized():

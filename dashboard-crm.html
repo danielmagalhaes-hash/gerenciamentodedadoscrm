@@ -372,7 +372,8 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
   <button class="tab-btn" data-page="wf">WhatsApp Fluxo</button>
   <button class="tab-btn" data-page="wc">WhatsApp Campanha</button>
   <button class="tab-btn" data-page="co">Comunidade WhatsApp</button>
-  <button class="tab-btn" data-page="log" style="margin-left:auto;color:var(--primary);font-weight:600">📋 Log CRM</button>
+  <button onclick="openMetasModal()" style="background:transparent;border:none;padding:14px 16px;font-size:13px;font-weight:600;color:#7c3aed;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;margin-left:auto">🎯 Metas</button>
+  <button class="tab-btn" data-page="log" style="color:var(--primary);font-weight:600">📋 Log CRM</button>
 </nav>
 
 <main>
@@ -792,6 +793,7 @@ function _enterDashboard(email) {
   }
   _refreshLastUpdate();
   checkCronAlerts();
+  fetchAndRenderMetas();
   renderResumo();
 }
 
@@ -1507,9 +1509,8 @@ function _drawResumo() {
   document.getElementById('bar-repeat').style.width  = revAtrib>0 ? Math.min(safe(revRepeat,revAtrib)*100,100)+'%' : '0%';
 
   document.getElementById('rev-total').textContent  = fmtBRLfull(revAtrib);
-  document.getElementById('meta-total').textContent = '—';
-  document.getElementById('pct-total').textContent  = '—';
-  document.getElementById('bar-total').style.width  = '0%';
+  window._revAtribMTD = revAtrib;
+  _renderMetaTotalCard(revAtrib);
 
   // — Gráfico diário 1ª vs Recompra (por dia, pedidos atribuídos) —
   const dates     = makeDateRange(start, end);
@@ -3964,6 +3965,124 @@ checkAuth(); // verifica sessão → mostra overlay ou carrega dashboard
 updateAssetFilter('resumo');
 
 // =========================================
+// MODAL DE METAS — configuração mensal
+// =========================================
+function openMetasModal() {
+  const sel = document.getElementById('metas-month');
+  sel.innerHTML = '';
+  const now = new Date();
+  for (let i = 0; i < 6; i++) {
+    const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = d.toISOString().slice(0, 10);
+    const lbl = d.toLocaleDateString('pt-BR', {month:'long', year:'numeric'});
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = lbl.charAt(0).toUpperCase() + lbl.slice(1);
+    if (i === 0) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  document.getElementById('metas-modal').style.display = 'flex';
+  document.getElementById('metas-msg').textContent = '';
+  loadMetas();
+}
+
+function closeMetasModal() {
+  document.getElementById('metas-modal').style.display = 'none';
+}
+
+async function loadMetas() {
+  const month = document.getElementById('metas-month').value;
+  const msg   = document.getElementById('metas-msg');
+  msg.textContent = 'Carregando...';
+  msg.style.color = '#6b7280';
+  ['metas-ef','metas-ec','metas-wf','metas-wc','metas-co','metas-total'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  const { data, error } = await supabase
+    .from('fact_monthly_goals').select('*').eq('month', month).maybeSingle();
+  if (error) { msg.textContent = 'Erro ao carregar metas.'; msg.style.color = '#dc2626'; return; }
+  if (data) {
+    document.getElementById('metas-ef').value    = data.goal_email_flow_brl     ?? '';
+    document.getElementById('metas-ec').value    = data.goal_email_campaign_brl ?? '';
+    document.getElementById('metas-wf').value    = data.goal_wpp_flow_brl       ?? '';
+    document.getElementById('metas-wc').value    = data.goal_wpp_campaign_brl   ?? '';
+    document.getElementById('metas-co').value    = data.goal_community_brl      ?? '';
+    document.getElementById('metas-total').value = data.goal_total_brl          ?? '';
+    msg.textContent = 'Meta carregada.';
+  } else {
+    msg.textContent = 'Nenhuma meta configurada para este mês.';
+  }
+}
+
+async function saveMetas() {
+  const month = document.getElementById('metas-month').value;
+  const total = parseFloat(document.getElementById('metas-total').value) || null;
+  const msg   = document.getElementById('metas-msg');
+  if (!total) {
+    msg.textContent = 'Preencha pelo menos a Meta Total.';
+    msg.style.color = '#dc2626';
+    return;
+  }
+  const btn = document.getElementById('metas-btn');
+  btn.disabled = true; btn.textContent = '...'; msg.textContent = '';
+  const toNum = id => { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; };
+  try {
+    const resp = await fetch('/admin/monthly-goals', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        month,
+        goal_total_brl:          total,
+        goal_email_flow_brl:     toNum('metas-ef'),
+        goal_email_campaign_brl: toNum('metas-ec'),
+        goal_wpp_flow_brl:       toNum('metas-wf'),
+        goal_wpp_campaign_brl:   toNum('metas-wc'),
+        goal_community_brl:      toNum('metas-co'),
+      }),
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(json.error || resp.statusText);
+    msg.textContent = '✓ Metas salvas!'; msg.style.color = '#047857';
+    btn.disabled = false; btn.textContent = 'Salvar Metas';
+    const now = new Date();
+    const curMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+    if (month === curMonth) fetchAndRenderMetas();
+  } catch (err) {
+    msg.textContent = 'Erro: ' + err.message; msg.style.color = '#dc2626';
+    btn.disabled = false; btn.textContent = 'Salvar Metas';
+  }
+}
+
+async function fetchAndRenderMetas() {
+  const now   = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  const { data } = await supabase
+    .from('fact_monthly_goals').select('*').eq('month', month).maybeSingle();
+  window._metasData = data || null;
+  window._channelGoals = data ? {
+    ef: parseFloat(data.goal_email_flow_brl)     || 0,
+    ec: parseFloat(data.goal_email_campaign_brl) || 0,
+    wf: parseFloat(data.goal_wpp_flow_brl)       || 0,
+    wc: parseFloat(data.goal_wpp_campaign_brl)   || 0,
+    co: parseFloat(data.goal_community_brl)      || 0,
+  } : {};
+  _renderMetaTotalCard(window._revAtribMTD || 0);
+}
+
+function _renderMetaTotalCard(revAtrib) {
+  const goal = window._metasData ? (parseFloat(window._metasData.goal_total_brl) || 0) : 0;
+  if (goal > 0) {
+    document.getElementById('meta-total').textContent = fmtBRLfull(goal);
+    document.getElementById('pct-total').textContent  = fmtPct1(revAtrib / goal) + ' da meta';
+    document.getElementById('bar-total').style.width  = Math.min(revAtrib / goal * 100, 100) + '%';
+  } else {
+    document.getElementById('meta-total').textContent = '—';
+    document.getElementById('pct-total').textContent  = '—';
+    document.getElementById('bar-total').style.width  = '0%';
+  }
+}
+
+// =========================================
 // MODAL DE ACESSO — criação de usuários
 // =========================================
 function openAcessoModal() {
@@ -4006,6 +4125,34 @@ async function criarAcesso() {
 </script>
 
 <!-- Modal de criação de acesso -->
+<div id="metas-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:32px;width:440px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.18)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <strong style="font-size:16px">🎯 Metas Mensais</strong>
+      <button onclick="closeMetasModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7785">×</button>
+    </div>
+    <label style="font-size:13px;font-weight:500">Mês de referência</label>
+    <select id="metas-month" onchange="loadMetas()" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;margin:4px 0 20px;box-sizing:border-box"></select>
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Meta por Canal (R$)</div>
+    <label style="font-size:13px;font-weight:500">E-mail Fluxo</label>
+    <input id="metas-ef" type="number" min="0" step="1" placeholder="0" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;margin:4px 0 12px;box-sizing:border-box">
+    <label style="font-size:13px;font-weight:500">E-mail Campanha</label>
+    <input id="metas-ec" type="number" min="0" step="1" placeholder="0" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;margin:4px 0 12px;box-sizing:border-box">
+    <label style="font-size:13px;font-weight:500">WhatsApp Fluxo</label>
+    <input id="metas-wf" type="number" min="0" step="1" placeholder="0" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;margin:4px 0 12px;box-sizing:border-box">
+    <label style="font-size:13px;font-weight:500">WhatsApp Campanha</label>
+    <input id="metas-wc" type="number" min="0" step="1" placeholder="0" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;margin:4px 0 12px;box-sizing:border-box">
+    <label style="font-size:13px;font-weight:500">Comunidade WhatsApp</label>
+    <input id="metas-co" type="number" min="0" step="1" placeholder="0" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;margin:4px 0 20px;box-sizing:border-box">
+    <div style="border-top:2px solid #e5e7eb;padding-top:16px;margin-bottom:16px">
+      <label style="font-size:13px;font-weight:700">Meta Total CRM (R$)</label>
+      <input id="metas-total" type="number" min="0" step="1" placeholder="0" style="width:100%;padding:10px 12px;border:2px solid #1e3a8a;border-radius:7px;font-size:15px;font-weight:700;margin:6px 0 0;box-sizing:border-box">
+    </div>
+    <button id="metas-btn" onclick="saveMetas()" style="width:100%;padding:12px;background:#111;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer">Salvar Metas</button>
+    <div id="metas-msg" style="font-size:13px;margin-top:10px;min-height:18px;text-align:center"></div>
+  </div>
+</div>
+
 <div id="acesso-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:14px;padding:36px;width:360px;box-shadow:0 8px 40px rgba(0,0,0,.18)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
