@@ -294,7 +294,7 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
 <div id="login-overlay" style="display:none">
   <div class="login-card">
     <h2>CRM Dashboard</h2>
-    <p>Acesso restrito a <strong>@minimalclub.com.br</strong> e <strong>@moonventures.com</strong>.<br>
+    <p>Acesso restrito a <strong>@minimalclub.com.br</strong> e <strong>@moonventures.com.br</strong>.<br>
        Insira seu e-mail para receber o link de acesso.</p>
     <input id="login-email" type="email" placeholder="seu@minimalclub.com.br" autocomplete="email">
     <button class="btn-login" id="btn-login" onclick="sendMagicLink()">Entrar com e-mail</button>
@@ -728,7 +728,7 @@ async function checkCronAlerts() {
 const AUTH_ENABLED = true;
 let _userRole = 'view'; // preenchido após login: 'view' | 'edit' | 'admin'
 
-const ALLOWED_DOMAINS = ['@minimalclub.com.br', '@moonventures.com'];
+const ALLOWED_DOMAINS = ['@minimalclub.com.br', '@moonventures.com.br'];
 const REDIRECT_URL = 'https://gerenciadorcrm.vercel.app/';
 
 let _dashboardReady = false; // evita duplo render
@@ -802,7 +802,7 @@ async function sendMagicLink() {
   if (!email) return;
   if (!_isAllowedEmail(email)) {
     const el = document.getElementById('login-msg');
-    el.textContent = 'E-mail não autorizado. Use @minimalclub.com.br ou @moonventures.com.';
+    el.textContent = 'E-mail não autorizado. Use @minimalclub.com.br ou @moonventures.com.br.';
     el.className = 'err';
     return;
   }
@@ -838,7 +838,7 @@ async function checkAuth() {
   const email = session.user.email || '';
   if (!_isAllowedEmail(email)) {
     await _sb.auth.signOut();
-    _showLoginOverlay('E-mail não autorizado. Use @minimalclub.com.br ou @moonventures.com.', true);
+    _showLoginOverlay('E-mail não autorizado. Use @minimalclub.com.br ou @moonventures.com.br.', true);
     return;
   }
   _userRole = session.user.app_metadata?.role || 'view';
@@ -851,7 +851,7 @@ _sb.auth.onAuthStateChange(async (event, session) => {
     const email = session.user.email || '';
     if (!_isAllowedEmail(email)) {
       await _sb.auth.signOut();
-      _showLoginOverlay('E-mail não autorizado. Use @minimalclub.com.br ou @moonventures.com.', true);
+      _showLoginOverlay('E-mail não autorizado. Use @minimalclub.com.br ou @moonventures.com.br.', true);
       return;
     }
     _userRole = session.user.app_metadata?.role || 'view';
