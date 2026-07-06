@@ -2058,9 +2058,10 @@ async function renderChannel(key){
   const compConv   = safe(compTotals.orders, compTotals.sessions);
   const compRps    = safe(compTotals.revenue_brl, compTotals.sessions);
 
-  // Volumes: mock para WPP (Vekta ainda sem dados); real para Comunidade
+  // Volumes: real para WPP Fluxo (leads do Vekta) e Comunidade; mock para WPP Campanha (sem integração Vekta ainda)
   let disparos=0, participantes=0;
-  if(isWpp){ disparos = Math.round(s.purchases*80*rand(1.5,2.5)); }
+  if(key==='wf'){ disparos = wppLeadsRows.reduce((sum,r) => sum + (+r.total_leads||0), 0); }
+  else if(isWpp){ disparos = Math.round(s.purchases*80*rand(1.5,2.5)); }
   else if(isCommunity){ disparos = coTotals.disparos; }
 
   // KPIs do canal — 6º card: CTOR real para e-mail, mock para WPP
@@ -2221,7 +2222,7 @@ async function renderChannel(key){
     ];
   } else if(key === 'wf') {
     // WPP Fluxo — dados reais do banco
-    const totalDisparos  = wppLeadsRows.reduce((sum, r) => sum + (+r.total_leads || 0), 0);
+    const totalDisparos  = disparos;
     const totalRespostas = wppLeadsRows.reduce((sum, r) => sum + (+r.respostas || 0), 0);
     const totalDestravar = wppLeadsRows.reduce((sum, r) => sum + (+r.destravar_objecao || 0), 0);
     const totalNecessita = wppLeadsRows.reduce((sum, r) => sum + (+r.necessita_atencao || 0), 0);
