@@ -1035,10 +1035,12 @@ function _applyCustomerFilter(rows, revByType, customerFilter) {
     return {...r, revenue_brl: ov.revenue_brl, orders: ov.orders};
   });
 }
-function _deltaBadge(curr, prev) {
+function _deltaBadge(curr, prev, inverse=false) {
   if (!prev || prev === 0) return '';
   const pct = (curr - prev) / Math.abs(prev);
-  const cls = pct >= 0 ? 'up' : 'down';
+  // inverse=true: métrica onde valor menor é melhor (ex.: bounces, descadastros)
+  const isGood = inverse ? pct <= 0 : pct >= 0;
+  const cls = isGood ? 'up' : 'down';
   const sym = pct >= 0 ? '▲' : '▼';
   return `<span class="delta ${cls}">${sym} ${Math.abs(pct*100).toFixed(1)}%</span>`;
 }
@@ -1874,54 +1876,71 @@ async function renderChannel(key){
   const comp = getComparisonPeriod(start, end);
 
   let allRows = [], revByType = [], allCompRows = [], compRevByType = [];
-  let emailDaily = [], emailAssetRows = [], flowItemsMap = {}, inscritos = 0;
-  let emailFlowItemRows = [], communityDaily = [], communityMsgRows = [];
+  let emailDaily = [], emailDailyComp = [], emailAssetRows = [], flowItemsMap = {}, inscritos = 0, inscritosComp = 0;
+  let emailFlowItemRows = [], emailFlowItemRowsComp = [], communityDaily = [], communityMsgRows = [];
   let em001ByDay = {};
-  let wppInscritosByFlow = [], wppLeadsRows = [], wppRevRows = [], wppPendingRows = [];
+  let wppInscritosByFlow = [], wppLeadsRows = [], wppLeadsRowsComp = [], wppRevRows = [], wppPendingRows = [];
   try {
-    const fetches = [
-      fetchChannelData(start, end),
-      fetchRevenueByType(start, end),
-      fetchChannelData(comp.start, comp.end),
-      fetchRevenueByType(comp.start, comp.end),
-    ];
+    // Fetches nomeados por chave (em vez de índice posicional) — evita erro ao
+    // adicionar/remover fetches condicionais conforme o canal.
+    const fetches = {};
+    fetches.allRows       = fetchChannelData(start, end);
+    fetches.revByType     = fetchRevenueByType(start, end);
+    fetches.allCompRows   = fetchChannelData(comp.start, comp.end);
+    fetches.compRevByType = fetchRevenueByType(comp.start, comp.end);
     if (isEmail) {
-      fetches.push(fetchEmailChannelDaily(ch.slug, start, end));
-      fetches.push(key === 'ef' ? fetchEmailFlowAssets(start, end) : fetchEmailAssets(ch.slug, start, end));
+      fetches.emailDaily     = fetchEmailChannelDaily(ch.slug, start, end);
+      fetches.emailDailyComp = fetchEmailChannelDaily(ch.slug, comp.start, comp.end);
+      fetches.emailAssetRows = key === 'ef' ? fetchEmailFlowAssets(start, end) : fetchEmailAssets(ch.slug, start, end);
     }
     if (key === 'ef') {
-      fetches.push(fetchEmailFlowItems(start, end));
-      fetches.push(_sb.rpc('get_daily_em001_sends', { start_date: start, end_date: end }));
+      fetches.emailFlowItemRows     = fetchEmailFlowItems(start, end);
+      fetches.emailFlowItemRowsComp = fetchEmailFlowItems(comp.start, comp.end);
+      fetches.em001Rpc = _sb.rpc('get_daily_em001_sends', { start_date: start, end_date: end });
     }
     if (isCommunity) {
-      fetches.push(fetchCommunityDaily(start, end));
-      fetches.push(fetchCommunityMessageRevenue());
+      fetches.communityDaily  = fetchCommunityDaily(start, end);
+      fetches.communityMsgRows = fetchCommunityMessageRevenue();
     }
     if (key === 'wf') {
-      fetches.push(fetchWppFlowLeads(start, end));
-      fetches.push(fetchWppFlowRevenue(start, end));
-      fetches.push(fetchWppFlowUtmPending());
+      fetches.wppLeadsRows     = fetchWppFlowLeads(start, end);
+      fetches.wppLeadsRowsComp = fetchWppFlowLeads(comp.start, comp.end);
+      fetches.wppRevRows     = fetchWppFlowRevenue(start, end);
+      fetches.wppPendingRows = fetchWppFlowUtmPending();
     }
-    const results = await Promise.all(fetches);
-    allRows = results[0]; revByType = results[1];
-    allCompRows = results[2]; compRevByType = results[3];
-    if (isEmail) { emailDaily = results[4]; emailAssetRows = results[5]; }
-    if (key === 'ef' && results[6]) {
-      emailFlowItemRows = results[6];
-      for (const item of results[6]) {
+    const keys = Object.keys(fetches);
+    const values = await Promise.all(keys.map(k => fetches[k]));
+    const r = {};
+    keys.forEach((k, i) => { r[k] = values[i]; });
+
+    allRows = r.allRows; revByType = r.revByType;
+    allCompRows = r.allCompRows; compRevByType = r.compRevByType;
+    if (isEmail) { emailDaily = r.emailDaily; emailDailyComp = r.emailDailyComp; emailAssetRows = r.emailAssetRows; }
+    if (key === 'ef' && r.emailFlowItemRows) {
+      emailFlowItemRows = r.emailFlowItemRows;
+      for (const item of emailFlowItemRows) {
         if (!flowItemsMap[item.asset_id]) flowItemsMap[item.asset_id] = [];
         flowItemsMap[item.asset_id].push(item);
       }
       // Inscritos = soma de disparos dos e-mails EM001 de cada fluxo
-      inscritos = results[6]
+      inscritos = emailFlowItemRows
         .filter(item => /EM001/i.test(item.item_name || ''))
         .reduce((sum, item) => sum + (+item.sends || 0), 0);
     }
-    if (key === 'ef' && results[7]) {
-      for (const r of (results[7].data || [])) em001ByDay[(r.data||'').slice(0,10)] = +r.sends || 0;
+    if (key === 'ef') {
+      emailFlowItemRowsComp = r.emailFlowItemRowsComp || [];
+      inscritosComp = emailFlowItemRowsComp
+        .filter(item => /EM001/i.test(item.item_name || ''))
+        .reduce((sum, item) => sum + (+item.sends || 0), 0);
     }
-    if (isCommunity) { communityDaily = results[4] || []; communityMsgRows = results[5] || []; }
-    if (key === 'wf') { wppLeadsRows = results[4] || []; wppRevRows = results[5] || []; wppPendingRows = results[6] || []; }
+    if (key === 'ef' && r.em001Rpc) {
+      for (const row of (r.em001Rpc.data || [])) em001ByDay[(row.data||'').slice(0,10)] = +row.sends || 0;
+    }
+    if (isCommunity) { communityDaily = r.communityDaily || []; communityMsgRows = r.communityMsgRows || []; }
+    if (key === 'wf') {
+      wppLeadsRows = r.wppLeadsRows || []; wppLeadsRowsComp = r.wppLeadsRowsComp || [];
+      wppRevRows = r.wppRevRows || []; wppPendingRows = r.wppPendingRows || [];
+    }
   } catch(err) {
     document.getElementById('kpi-'+key).innerHTML =
       `<div style="grid-column:1/-1;color:var(--danger);padding:20px">Erro ao carregar: ${err.message}</div>`;
@@ -1952,6 +1971,9 @@ async function renderChannel(key){
 
   const s = {rev:totals.revenue_brl, purchases:totals.orders, sessions:totals.sessions,
               atc:totals.add_to_cart, bco:totals.begin_checkout};
+  // Receita do período anterior — usada para Receita/Inscrito quando um fluxo
+  // específico é selecionado (sobrescrita mais abaixo); por padrão é o total do canal.
+  let revComp = compTotals.revenue_brl;
 
   const dates     = makeDateRange(start, end);
   const compDates = makeDateRange(comp.start, comp.end);
@@ -1977,6 +1999,8 @@ async function renderChannel(key){
 
   let emByDay = {};
   for (const r of emailDaily) emByDay[(r.date||'').slice(0,10)] = r;
+  let emCompByDay = {};
+  for (const r of emailDailyComp) emCompByDay[(r.date||'').slice(0,10)] = r;
 
   const coTotals = communityDaily.reduce((a,r)=>({
     disparos:      a.disparos      + (+r.sends_count||0),
@@ -2008,15 +2032,24 @@ async function renderChannel(key){
       activeFlowFilter = flowSel;
       const selRow = emailAssetRows.find(r => r.asset_name === flowSel);
       if (selRow) {
-        const [flowEmDaily, flowRevData] = await Promise.all([
+        const [flowEmDaily, flowRevData, flowEmDailyComp, flowRevDataComp] = await Promise.all([
           fetchFlowDailyMetrics(flowSel, start, end),
           fetchFlowDailyRevenue(selRow.asset_name, start, end),
+          fetchFlowDailyMetrics(flowSel, comp.start, comp.end),
+          fetchFlowDailyRevenue(selRow.asset_name, comp.start, comp.end),
         ]);
         // Sobrescreve emByDay com dados do fluxo selecionado
         emByDay = {};
         for (const d of dates) {
           emByDay[d] = flowEmDaily[d]
             ? { sends: flowEmDaily[d].sends, opens: flowEmDaily[d].opens, clicks: flowEmDaily[d].clicks, bounces: 0, unsubscribes: 0 }
+            : { sends: 0, opens: 0, clicks: 0, bounces: 0, unsubscribes: 0 };
+        }
+        // Sobrescreve emCompByDay (período anterior) com dados do fluxo selecionado
+        emCompByDay = {};
+        for (const d of compDates) {
+          emCompByDay[d] = flowEmDailyComp[d]
+            ? { sends: flowEmDailyComp[d].sends, opens: flowEmDailyComp[d].opens, clicks: flowEmDailyComp[d].clicks, bounces: 0, unsubscribes: 0 }
             : { sends: 0, opens: 0, clicks: 0, bounces: 0, unsubscribes: 0 };
         }
         // Sobrescreve receita diária com receita do fluxo
@@ -2028,9 +2061,12 @@ async function renderChannel(key){
         s.rev = flowRevData.total;
         s.purchases = flowRevData.orders;
         s.sessions = 0; s.atc = 0; s.bco = 0;
-        // Inscritos apenas do fluxo selecionado
+        revComp = flowRevDataComp.total;
+        // Inscritos apenas do fluxo selecionado (período atual e anterior)
         const flowItems = emailFlowItemRows.filter(p => p.asset_id === selRow.asset_id);
         inscritos = flowItems.filter(p => /EM001/i.test(p.item_name||'')).reduce((sum,p)=>sum+(+p.sends||0),0);
+        const flowItemsComp = emailFlowItemRowsComp.filter(p => p.asset_id === selRow.asset_id);
+        inscritosComp = flowItemsComp.filter(p => /EM001/i.test(p.item_name||'')).reduce((sum,p)=>sum+(+p.sends||0),0);
         // EM001 diário do fluxo selecionado para o gráfico
         const { data: em001Days } = await _sb.rpc('get_daily_em001_sends', {
           start_date: start, end_date: end, p_flow_id: selRow.asset_id
@@ -2049,6 +2085,14 @@ async function renderChannel(key){
     bounces:      a.bounces      + (+r.bounces||0),
     unsubscribes: a.unsubscribes + (+r.unsubscribes||0),
   }), {sends:0, opens:0, clicks:0, bounces:0, unsubscribes:0});
+  // Mesmo cálculo para o período anterior — base da comparação "melhorando/piorando"
+  const emComp = Object.values(emCompByDay).reduce((a,r) => ({
+    sends:        a.sends        + (+r.sends||0),
+    opens:        a.opens        + (+r.opens||0),
+    clicks:       a.clicks       + (+r.clicks||0),
+    bounces:      a.bounces      + (+r.bounces||0),
+    unsubscribes: a.unsubscribes + (+r.unsubscribes||0),
+  }), {sends:0, opens:0, clicks:0, bounces:0, unsubscribes:0});
 
   const safe = (a,b) => b>0 ? a/b : 0;
   const ticket     = safe(s.rev, s.purchases);
@@ -2059,8 +2103,11 @@ async function renderChannel(key){
   const compRps    = safe(compTotals.revenue_brl, compTotals.sessions);
 
   // Volumes: real para WPP Fluxo (leads do Vekta) e Comunidade; mock para WPP Campanha (sem integração Vekta ainda)
-  let disparos=0, participantes=0;
-  if(key==='wf'){ disparos = wppLeadsRows.reduce((sum,r) => sum + (+r.total_leads||0), 0); }
+  let disparos=0, disparosComp=0, participantes=0;
+  if(key==='wf'){
+    disparos     = wppLeadsRows.reduce((sum,r) => sum + (+r.total_leads||0), 0);
+    disparosComp = wppLeadsRowsComp.reduce((sum,r) => sum + (+r.total_leads||0), 0);
+  }
   else if(isWpp){ disparos = Math.round(s.purchases*80*rand(1.5,2.5)); }
   else if(isCommunity){ disparos = coTotals.disparos; }
 
@@ -2073,9 +2120,17 @@ async function renderChannel(key){
     {label:'Conversão',   val:s.sessions>0?fmtPct(conv):'—',                     delta:s.sessions>0&&compTotals.sessions>0?_deltaBadge(conv,compConv):''},
   ];
   if(isEmail && key === 'ef'){
-    kpis.push({label:'Receita / Inscrito', val:inscritos>0?fmtBRL2(safe(s.rev,inscritos)):'—', highlight:true, delta:''});
+    const revPorInscritoComp = safe(revComp, inscritosComp);
+    kpis.push({label:'Receita / Inscrito', val:inscritos>0?fmtBRL2(safe(s.rev,inscritos)):'—', highlight:true,
+      delta: (inscritos>0 && inscritosComp>0) ? _deltaBadge(safe(s.rev,inscritos), revPorInscritoComp) : ''});
   } else if(isEmail && key === 'ec'){
-    kpis.push({label:'Receita / Disparo', val:em.sends>0?fmtBRL2(safe(s.rev,em.sends)):'—', highlight:true, delta:''});
+    const revPorDisparoComp = safe(compTotals.revenue_brl, emComp.sends);
+    kpis.push({label:'Receita / Disparo', val:em.sends>0?fmtBRL2(safe(s.rev,em.sends)):'—', highlight:true,
+      delta: (em.sends>0 && emComp.sends>0) ? _deltaBadge(safe(s.rev,em.sends), revPorDisparoComp) : ''});
+  } else if(key === 'wf'){
+    const revPorDisparoComp = safe(compTotals.revenue_brl, disparosComp);
+    kpis.push({label:'Receita / Disparo', val:disparos>0?fmtBRL2(safe(s.rev,disparos)):'—', highlight:true,
+      delta: (disparos>0 && disparosComp>0) ? _deltaBadge(safe(s.rev,disparos), revPorDisparoComp) : ''});
   } else if(cfg.topPerDisparo){
     kpis.push({label:'Receita / Disparo', val:disparos>0?fmtBRL2(safe(s.rev,disparos)):'—', highlight:true, delta:''});
   }
@@ -2198,15 +2253,22 @@ async function renderChannel(key){
   let spec = [];
   if(isEmail){
     spec = [
-      {label:'Disparos',         val:fmtInt(em.sends)},
-      {label:'Aberturas',        val:fmtInt(em.opens)},
-      {label:'Taxa de Abertura', val:em.sends>0?fmtPct1(safe(em.opens,em.sends)):'—'},
-      {label:'Cliques',          val:fmtInt(em.clicks)},
-      {label:'CTOR',             val:em.opens>0?fmtPct1(safe(em.clicks,em.opens)):'—'},
-      ...(key==='ec' ? [{label:'Descadastros',val:fmtInt(em.unsubscribes)},{label:'Bounces',val:fmtInt(em.bounces)}] : []),
+      {label:'Disparos',         val:fmtInt(em.sends),  delta:_deltaBadge(em.sends, emComp.sends)},
+      {label:'Aberturas',        val:fmtInt(em.opens),  delta:_deltaBadge(em.opens, emComp.opens)},
+      {label:'Taxa de Abertura', val:em.sends>0?fmtPct1(safe(em.opens,em.sends)):'—',
+        delta:(em.sends>0&&emComp.sends>0)?_deltaBadge(safe(em.opens,em.sends), safe(emComp.opens,emComp.sends)):''},
+      {label:'Cliques',          val:fmtInt(em.clicks), delta:_deltaBadge(em.clicks, emComp.clicks)},
+      {label:'CTOR',             val:em.opens>0?fmtPct1(safe(em.clicks,em.opens)):'—',
+        delta:(em.opens>0&&emComp.opens>0)?_deltaBadge(safe(em.clicks,em.opens), safe(emComp.clicks,emComp.opens)):''},
+      ...(key==='ec' ? [
+        {label:'Descadastros', val:fmtInt(em.unsubscribes), delta:_deltaBadge(em.unsubscribes, emComp.unsubscribes, true)},
+        {label:'Bounces',      val:fmtInt(em.bounces),      delta:_deltaBadge(em.bounces, emComp.bounces, true)},
+      ] : []),
       key==='ef'
-        ? {label:'Receita / Inscrito', val:inscritos>0?fmtBRL2(safe(s.rev,inscritos)):'—'}
-        : {label:'Receita / Disparo',  val:em.sends>0?fmtBRL2(safe(s.rev,em.sends)):'—'},
+        ? {label:'Receita / Inscrito', val:inscritos>0?fmtBRL2(safe(s.rev,inscritos)):'—',
+            delta:(inscritos>0&&inscritosComp>0)?_deltaBadge(safe(s.rev,inscritos), safe(revComp,inscritosComp)):''}
+        : {label:'Receita / Disparo',  val:em.sends>0?fmtBRL2(safe(s.rev,em.sends)):'—',
+            delta:(em.sends>0&&emComp.sends>0)?_deltaBadge(safe(s.rev,em.sends), safe(compTotals.revenue_brl,emComp.sends)):''},
     ];
   } else if(isCommunity){
     const liquido = coTotals.entradas - coTotals.saidas;
@@ -2226,15 +2288,29 @@ async function renderChannel(key){
     const totalRespostas = wppLeadsRows.reduce((sum, r) => sum + (+r.respostas || 0), 0);
     const totalDestravar = wppLeadsRows.reduce((sum, r) => sum + (+r.destravar_objecao || 0), 0);
     const totalNecessita = wppLeadsRows.reduce((sum, r) => sum + (+r.necessita_atencao || 0), 0);
+    // Mesmos totais no período anterior — base da comparação "melhorando/piorando"
+    const totalDisparosComp  = disparosComp;
+    const totalRespostasComp = wppLeadsRowsComp.reduce((sum, r) => sum + (+r.respostas || 0), 0);
+    const totalDestravarComp = wppLeadsRowsComp.reduce((sum, r) => sum + (+r.destravar_objecao || 0), 0);
+    const totalNecessitaComp = wppLeadsRowsComp.reduce((sum, r) => sum + (+r.necessita_atencao || 0), 0);
+    const purchasesComp = compTotals.orders;
     spec = [
-      {label:'Disparos (leads criados)',   val: totalDisparos > 0 ? fmtInt(totalDisparos) : '—'},
-      {label:'Respostas',                  val: fmtInt(totalRespostas)},
-      {label:'Taxa de Resposta',           val: totalDisparos > 0 ? fmtPct1(safe(totalRespostas, totalDisparos)) : '—'},
-      {label:'Destravar Objeção',          val: fmtInt(totalDestravar)},
-      {label:'Necessita Atenção',          val: fmtInt(totalNecessita)},
-      {label:'Retenção da IA',             val: totalRespostas > 0 ? fmtPct1(safe(totalRespostas - totalNecessita, totalRespostas)) : '—'},
-      {label:'Conversão Resposta → Venda', val: totalRespostas > 0 ? fmtPct1(safe(s.purchases, totalRespostas)) : '—'},
-      {label:'Receita / Disparo',          val: totalDisparos > 0 ? fmtBRL2(safe(s.rev, totalDisparos)) : '—'},
+      {label:'Disparos (leads criados)',   val: totalDisparos > 0 ? fmtInt(totalDisparos) : '—',
+        delta: _deltaBadge(totalDisparos, totalDisparosComp)},
+      {label:'Respostas',                  val: fmtInt(totalRespostas),
+        delta: _deltaBadge(totalRespostas, totalRespostasComp)},
+      {label:'Taxa de Resposta',           val: totalDisparos > 0 ? fmtPct1(safe(totalRespostas, totalDisparos)) : '—',
+        delta: (totalDisparos>0&&totalDisparosComp>0)?_deltaBadge(safe(totalRespostas,totalDisparos), safe(totalRespostasComp,totalDisparosComp)):''},
+      {label:'Destravar Objeção',          val: fmtInt(totalDestravar),
+        delta: _deltaBadge(totalDestravar, totalDestravarComp)},
+      {label:'Necessita Atenção',          val: fmtInt(totalNecessita),
+        delta: _deltaBadge(totalNecessita, totalNecessitaComp, true)},
+      {label:'Retenção da IA',             val: totalRespostas > 0 ? fmtPct1(safe(totalRespostas - totalNecessita, totalRespostas)) : '—',
+        delta: (totalRespostas>0&&totalRespostasComp>0)?_deltaBadge(safe(totalRespostas-totalNecessita,totalRespostas), safe(totalRespostasComp-totalNecessitaComp,totalRespostasComp)):''},
+      {label:'Conversão Resposta → Venda', val: totalRespostas > 0 ? fmtPct1(safe(s.purchases, totalRespostas)) : '—',
+        delta: (totalRespostas>0&&totalRespostasComp>0)?_deltaBadge(safe(s.purchases,totalRespostas), safe(purchasesComp,totalRespostasComp)):''},
+      {label:'Receita / Disparo',          val: totalDisparos > 0 ? fmtBRL2(safe(s.rev, totalDisparos)) : '—',
+        delta: (totalDisparos>0&&totalDisparosComp>0)?_deltaBadge(safe(s.rev,totalDisparos), safe(compTotals.revenue_brl,totalDisparosComp)):''},
     ];
   } else {
     // WPP Campanha — mock (sem integração Vekta ainda)
@@ -2256,6 +2332,7 @@ async function renderChannel(key){
     <div class="card">
       <div class="card-title">${m.label}</div>
       <div style="font-size:18px;font-weight:700">${m.val}</div>
+      ${m.delta ? `<div style="margin-top:4px;display:flex;align-items:center;gap:4px">${m.delta}<span class="delta-label">vs. período anterior</span></div>` : ''}
     </div>
   `).join('');
 
