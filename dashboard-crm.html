@@ -385,7 +385,7 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
 <section class="page active" id="page-resumo">
 
   <div class="section-title">KPIs Topline · CRM Total</div>
-  <div class="grid grid-5" id="kpi-topline"></div>
+  <div class="grid grid-6" id="kpi-topline"></div>
 
   <div class="section-title">Receita CRM segmentada (1ª Compra vs Recompra)</div>
   <div class="grid grid-3">
@@ -1488,6 +1488,7 @@ function _drawResumo() {
   document.getElementById('kpi-topline').innerHTML = [
     {label:'Faturamento CRM', val:fmtBRLfull(total.revenue_brl), delta:_deltaBadge(total.revenue_brl, compTotal.revenue_brl)},
     {label:'Pedidos',         val:fmtInt(total.orders),           delta:_deltaBadge(total.orders, compTotal.orders)},
+    {label:'Sessões',         val:fmtInt(total.sessions),         delta:_deltaBadge(total.sessions, compTotal.sessions)},
     {label:'Ticket Médio',    val:total.orders>0?fmtBRLfull(ticket):'—',   delta:total.orders>0&&compTotal.orders>0?_deltaBadge(ticket,compTicket):''},
     {label:'RPS',             val:total.sessions>0?fmtBRL2(rps):'—',       delta:total.sessions>0&&compTotal.sessions>0?_deltaBadge(rps,compRps):''},
     {label:'Conversão Geral', val:total.sessions>0?fmtPct(conv):'—',       delta:total.sessions>0&&compTotal.sessions>0?_deltaBadge(conv,compConv):''},
@@ -2115,6 +2116,7 @@ async function renderChannel(key){
   const kpis = [
     {label:'Faturamento', val:fmtBRLfull(s.rev),                                delta:_deltaBadge(s.rev, compTotals.revenue_brl)},
     {label:'Compras',     val:fmtInt(s.purchases),                               delta:_deltaBadge(s.purchases, compTotals.orders)},
+    {label:'Sessões',     val:fmtInt(s.sessions),                                delta:_deltaBadge(s.sessions, compTotals.sessions)},
     {label:'Ticket Médio',val:s.purchases>0?fmtBRLfull(ticket):'—',              delta:s.purchases>0&&compTotals.orders>0?_deltaBadge(ticket,compTicket):''},
     {label:'RPS',         val:s.sessions>0?fmtBRL2(rps):'—',                     delta:s.sessions>0&&compTotals.sessions>0?_deltaBadge(rps,compRps):''},
     {label:'Conversão',   val:s.sessions>0?fmtPct(conv):'—',                     delta:s.sessions>0&&compTotals.sessions>0?_deltaBadge(conv,compConv):''},
