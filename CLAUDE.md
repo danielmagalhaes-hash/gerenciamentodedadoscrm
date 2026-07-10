@@ -85,19 +85,37 @@
 ```
 gerenciamentodedadoscrm/
 │
-├── CLAUDE.md                  ← este arquivo
-├── ARCHITECTURE.md            ← mapa vivo do sistema
-├── PRODUCT.md                 ← fonte de verdade do domínio
-├── README.md                  ← visão geral do projeto para humanos
+├── CLAUDE.md                  ← este arquivo (fica na raiz para leitura automática)
+│
+├── Controle Geral/            ← governança do projeto, fora do sistema em si
+│   ├── ARCHITECTURE.md        ← mapa vivo do sistema
+│   ├── 00-trilho-mestre.md
+│   ├── 01-checklist-sessao.md
+│   ├── 02-checklist-novo-projeto.md
+│   ├── 03-checklist-nova-feature.md
+│   └── 04-checklist-revisao.md
+│
+├── Gerenciador de CRM/         ← tudo do sistema que não é caminho crítico de deploy
+│   ├── PRODUCT.md              ← fonte de verdade do domínio
+│   ├── README.md               ← visão geral do projeto para humanos
+│   ├── VIBE-WORKFLOW.md
+│   ├── docs/
+│   │   ├── specs/              ← spec de cada feature antes de implementar
+│   │   ├── decisions/          ← ADRs (decisões arquiteturais duradouras)
+│   │   └── sessions/           ← log de cada sessão de desenvolvimento
+│   ├── principios/
+│   ├── prompts/
+│   ├── referencia/
+│   └── templates/
+│
+├── Jornada do Cliente/         ← análises de jornada do cliente
+├── Análises - Base de Dados Extras/  ← bases extras para análise pontual
 │
 ├── dashboard-crm.html         ← FRONTEND EXISTENTE — não alterar estrutura HTML/CSS
 │                                 Apenas substituir dados mock por chamadas à API Supabase
+│                                 Fica na raiz: caminho amarrado em vercel.json e api/cron/app.py
 ├── docs-crm.html              ← documentação executiva existente — não alterar
-│
-├── docs/
-│   ├── specs/                 ← spec de cada feature antes de implementar
-│   ├── decisions/             ← ADRs (decisões arquiteturais duradouras)
-│   └── sessions/              ← log de cada sessão de desenvolvimento
+│                                 Fica na raiz: servido estaticamente pela Vercel nesse caminho
 │
 ├── ingestion/                 ← scripts Python de ingestão de dados
 │   ├── sources/               ← um arquivo por fonte de dados externa
@@ -232,7 +250,7 @@ gerenciamentodedadoscrm/
    - Upsert por chave única (nunca insert simples — risco de duplicata)
 4. Adicionar rota em `api/cron/app.py` e novo arquivo `api/cron/[fonte].py` como entry point
 5. Registrar o cron em `vercel.json` com schedule e path
-6. Atualizar `ARCHITECTURE.md` (seção de fontes e fluxo de dados)
+6. Atualizar `Controle Geral/ARCHITECTURE.md` (seção de fontes e fluxo de dados)
 
 ### Como adicionar uma migration no Supabase
 
@@ -248,7 +266,7 @@ gerenciamentodedadoscrm/
    - Políticas RLS de escrita apenas para service_role
    - Índices nas colunas de filtro frequente (`channel_id`, `date`, `asset_id`)
 4. Testar localmente com `supabase db reset` antes de aplicar em produção
-5. Atualizar `ARCHITECTURE.md` (seção de modelo de dados)
+5. Atualizar `Controle Geral/ARCHITECTURE.md` (seção de modelo de dados)
 
 ### Como conectar uma nova métrica do dashboard ao Supabase
 
@@ -277,7 +295,7 @@ gerenciamentodedadoscrm/
    - Nomear colunas com termos do glossário (seção 5)
    - Incluir `channel_slug` para filtro no frontend
 3. Adicionar política RLS de SELECT para anon role na view
-4. Documentar a view em `ARCHITECTURE.md` (seção de views)
+4. Documentar a view em `Controle Geral/ARCHITECTURE.md` (seção de views)
 
 ---
 
@@ -438,16 +456,16 @@ supabase db --execute "SELECT COUNT(*), MAX(ingested_at) FROM fact_orders;"
 
 ## 9. Comportamento esperado do Claude
 
-1. **Antes de qualquer código:** ler `ARCHITECTURE.md` inteiro.
+1. **Antes de qualquer código:** ler `Controle Geral/ARCHITECTURE.md` inteiro.
 2. **Antes de implementar feature nova:** confirmar em voz alta — (a) quais tabelas serão tocadas, (b) qual fonte de dados envolvida, (c) qual o risco de corromper dados existentes.
-3. **Quando em dúvida sobre fonte de dados:** consultar `PRODUCT.md` seção 5 (Fluxos) e seção 8 (Restrições). Não inventar.
-4. **Ao terminar sessão:** atualizar `ARCHITECTURE.md` + criar `docs/sessions/YYYY-MM-DD-[tema].md`.
+3. **Quando em dúvida sobre fonte de dados:** consultar `Gerenciador de CRM/PRODUCT.md` seção 5 (Fluxos) e seção 8 (Restrições). Não inventar.
+4. **Ao terminar sessão:** atualizar `Controle Geral/ARCHITECTURE.md` + criar `Gerenciador de CRM/docs/sessions/YYYY-MM-DD-[tema].md`.
 5. **Se encontrar inconsistência entre `ARCHITECTURE.md` e código real:** parar, reportar, não silenciar nem consertar sem alinhamento.
 6. **Nunca tocar `dashboard-crm.html` além da substituição de dados mock** — layout, CSS e estrutura HTML são intocáveis.
 7. **Nunca adicionar dependência Python** sem perguntar e justificar contra as alternativas já no stack.
 8. **Nunca criar migration sem nome descritivo** e cabeçalho de reversibilidade.
 9. **Nunca usar "envio"** — sempre "disparo" (R10).
-10. **Antes de conectar nova fonte de dados:** verificar se `PRODUCT.md` seção 5 já descreve o fluxo esperado. Se não descreve, atualizar `PRODUCT.md` primeiro.
+10. **Antes de conectar nova fonte de dados:** verificar se `Gerenciador de CRM/PRODUCT.md` seção 5 já descreve o fluxo esperado. Se não descreve, atualizar `PRODUCT.md` primeiro.
 11. **Toda nova versão é criada e validada localmente antes de subir para a Vercel (R13).** Fluxo obrigatório:
     - Implementar localmente
     - Testar com `python -m http.server 8080` (dashboard) e scripts Python com `.env` real
