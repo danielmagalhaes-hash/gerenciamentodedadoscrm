@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 _ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
-_ALLOWED_DOMAINS = ('@minimalclub.com.br', '@moonventures.com.br', '@hommy.com.br')
+_ALLOWED_DOMAINS = ('@minimalclub.com.br', '@moonventures.com.br', '@hoomy.com.br')
 _SUPABASE_URL    = 'https://aczvusdzfrmborvvfqib.supabase.co'
 _SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenZ1c2R6ZnJtYm9ydnZmcWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3ODkwNTIsImV4cCI6MjA5NDM2NTA1Mn0.hb0RjoXdmHN7wKLvhRCkJjq-ycqxE3FaJlYKtMEqumk'
 
