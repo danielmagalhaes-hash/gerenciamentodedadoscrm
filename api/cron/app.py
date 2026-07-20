@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 _ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
-_ALLOWED_DOMAINS = ('@minimalclub.com.br', '@moonventures.com.br')
+_ALLOWED_DOMAINS = ('@minimalclub.com.br', '@moonventures.com.br', '@hommy.com.br')
 _SUPABASE_URL    = 'https://aczvusdzfrmborvvfqib.supabase.co'
 _SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenZ1c2R6ZnJtYm9ydnZmcWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3ODkwNTIsImV4cCI6MjA5NDM2NTA1Mn0.hb0RjoXdmHN7wKLvhRCkJjq-ycqxE3FaJlYKtMEqumk'
 
@@ -78,7 +78,7 @@ _LOGIN_HTML = f"""<!DOCTYPE html>
 <div class="card">
   <div class="logo">📊</div>
   <h2>Dashboard CRM</h2>
-  <p>Acesso restrito a @minimalclub.com.br<br>e @moonventures.com.br</p>
+  <p>Acesso restrito a {" · ".join(_ALLOWED_DOMAINS)}</p>
   <label>E-mail</label>
   <input id="email" type="email" placeholder="seu@minimalclub.com.br" autocomplete="email">
   <label>Senha</label>
@@ -89,7 +89,7 @@ _LOGIN_HTML = f"""<!DOCTYPE html>
 <script>
 const {{createClient}} = supabase;
 const _sb = createClient('{_SUPABASE_URL}', '{_SUPABASE_ANON}');
-const ALLOWED = ['{_ALLOWED_DOMAINS[0]}','{_ALLOWED_DOMAINS[1]}'];
+const ALLOWED = {list(_ALLOWED_DOMAINS)!r};
 
 async function login() {{
   const email = document.getElementById('email').value.trim();
@@ -97,7 +97,7 @@ async function login() {{
   const errEl = document.getElementById('err');
   errEl.textContent = '';
   if (!ALLOWED.some(d => email.endsWith(d))) {{
-    errEl.textContent = 'Use um e-mail @minimalclub.com.br ou @moonventures.com.br.';
+    errEl.textContent = 'Use um e-mail ' + ALLOWED.join(' ou ') + '.';
     return;
   }}
   document.getElementById('btn').textContent = 'Entrando...';
