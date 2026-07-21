@@ -59,6 +59,12 @@ main{padding:24px 28px;max-width:1600px;margin:0 auto}
 .chart-box{position:relative;height:260px}
 .chart-box.sm{height:180px}
 .chart-box.lg{height:340px}
+.section-title .hint{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted);margin-left:8px}
+.empty-note{color:var(--muted);padding:20px;text-align:center}
+.error-note{color:var(--danger);padding:20px}
+.range-btn{background:#fff;border:none;padding:6px 12px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;border-right:1px solid var(--border)}
+.range-btn:last-child{border-right:none}
+.range-btn.active{background:var(--primary);color:#fff}
 .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
 .tag.green{background:rgba(16,185,129,.12);color:var(--success)}
 .tag.yellow{background:rgba(245,158,11,.12);color:var(--warning)}
@@ -377,7 +383,7 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
   <button class="tab-btn" data-page="co">Comunidade WhatsApp</button>
   <button onclick="openMetasModal()" style="background:transparent;border:none;padding:14px 16px;font-size:13px;font-weight:600;color:#7c3aed;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;margin-left:auto">🎯 Metas</button>
   <button class="tab-btn" data-page="log" style="color:var(--primary);font-weight:600">📋 Log CRM</button>
-  <button onclick="window.open('recompra-crm.html','_blank')" style="color:#059669;font-weight:600">🔁 Recompra</button>
+  <button class="tab-btn" data-page="recompra" style="color:#059669;font-weight:600">🔁 Recompra</button>
 </nav>
 
 <main>
@@ -667,6 +673,62 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
         <h3>❌ Não Repetir — Evitar <span class="pill" id="lib-neg-count">0</span></h3>
         <div id="lib-neg"></div>
       </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ============ RECOMPRA ============ -->
+<section class="page" id="page-recompra">
+
+  <div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
+    <label style="font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap">Mês de referência</label>
+    <select id="rc-f-ref-month"></select>
+    <span style="font-size:11px;color:var(--muted)" id="rc-ref-month-hint"></span>
+  </div>
+
+  <div class="section-title">Foto do mês selecionado <span class="hint" id="rc-latest-month-label"></span></div>
+  <div class="grid grid-4" id="rc-kpi-grid"></div>
+
+  <div class="section-title">Evolução mensal <span class="hint">passe o mouse para ver o valor de cada mês</span></div>
+  <div class="card">
+    <div class="card-title">
+      <span>Métrica</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+          <button type="button" class="range-btn active" data-range="12">Últimos 12 meses</button>
+          <button type="button" class="range-btn" data-range="all">Ver todo o histórico</button>
+        </div>
+        <select id="rc-f-metric"></select>
+      </div>
+    </div>
+    <div class="chart-box lg"><canvas id="rc-chart-metric"></canvas></div>
+  </div>
+
+  <div class="section-title">LTV 180 dias por safra de aquisição <span class="hint">receita média por cliente nos 180 dias após a 1ª compra</span></div>
+  <div class="card">
+    <div class="chart-box"><canvas id="rc-chart-ltv"></canvas></div>
+  </div>
+
+  <div class="section-title">Matriz de coortes <span class="hint">até o mês de referência selecionado acima</span></div>
+  <div class="card">
+    <div class="card-title">
+      <span>Visualizar por</span>
+      <select id="rc-f-cohort-view">
+        <option value="pct">Taxa de conversão (% de recompra)</option>
+        <option value="count">Quantidade de recompras</option>
+      </select>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px;font-size:11px;color:var(--muted)">
+      <span>Cor da célula vs. média da coluna — meses normais comparam entre si; mar/nov/dez comparam com o mesmo mês em anos anteriores</span>
+      <span style="display:flex;gap:10px;flex-shrink:0">
+        <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#10b981;margin-right:4px"></span>+20%</span>
+        <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#f59e0b;margin-right:4px"></span>±20%</span>
+        <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#ef4444;margin-right:4px"></span>-20%</span>
+      </span>
+    </div>
+    <div class="table-wrap">
+      <table id="rc-table-cohort"></table>
     </div>
   </div>
 
@@ -3109,10 +3171,15 @@ document.querySelectorAll('.tab-btn').forEach(b=>{
     b.classList.add('active');
     const p = b.dataset.page;
     document.getElementById('page-'+p).classList.add('active');
-    // Oculta barra de filtros globais no Log CRM (não se aplica)
-    document.querySelector('.filters').style.display = p === 'log' ? 'none' : '';
+    // Oculta barra de filtros globais no Log CRM e na Recompra (não se aplicam)
+    document.querySelector('.filters').style.display = (p === 'log' || p === 'recompra') ? 'none' : '';
     if(p === 'log'){
       if(!_logLoaded) renderLogPage();
+      window.scrollTo({top:0,behavior:'smooth'});
+      return;
+    }
+    if(p === 'recompra'){
+      if(!_recompraLoaded){ _recompraLoaded = true; initRecompraTab(); }
       window.scrollTo({top:0,behavior:'smooth'});
       return;
     }
@@ -3251,6 +3318,7 @@ function wppBaseKind(name){  return WPP_BASES.find(b=>b.name===name)?.kind||'col
 // =========================================
 let logData = [];   // todos os itens (ações+testes+campanhas)
 let _logLoaded = false;
+let _recompraLoaded = false;
 function logUid(){ return 'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function logFmtDate(iso){ if(!iso) return '—'; return new Date(iso+'T00:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}); }
 function logFmtDateFull(iso){ if(!iso) return '—'; return new Date(iso+'T00:00:00').toLocaleDateString('pt-BR'); }
@@ -4333,6 +4401,362 @@ async function criarAcesso() {
     <div id="acesso-msg" style="font-size:13px;margin-top:10px;min-height:18px"></div>
   </div>
 </div>
+
+<script>
+// =========================================
+// ABA RECOMPRA — encapsulado numa IIFE para não colidir com o resto do dashboard.
+// Reusa _sb, fmtInt, fmtPct1, fmtBRLfull, mkChart já definidos acima.
+// Carregado sob demanda (initRecompraTab) no primeiro clique na aba, como o Log CRM.
+// =========================================
+function initRecompraTab() {
+  const fmtMonth = m => {
+    const [y, mo] = m.split('-');
+    const nomes = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    return nomes[parseInt(mo,10)-1] + '/' + y.slice(2);
+  };
+
+  const KPI_DEFS = [
+    { key: 'clientes_ativos',           label: 'Clientes Ativos',     kind: 'int', goodUp: true  },
+    { key: 'clientes_recentes',         label: 'Recentes',            kind: 'int', goodUp: true  },
+    { key: 'clientes_inativos',         label: 'Inativos',            kind: 'int', goodUp: false },
+    { key: 'clientes_em_risco_m11_m12', label: 'Em risco M11/M12',    kind: 'int', goodUp: false },
+    { key: 'taxa_churn',                label: 'Taxa de Churn',       kind: 'pct', goodUp: false },
+    { key: 'taxa_repeticao',            label: 'Taxa de Repetição',   kind: 'pct', goodUp: true  },
+    { key: 'taxa_reativacao',           label: 'Taxa de Reativação',  kind: 'pct', goodUp: true  },
+  ];
+  const METRIC_OPTIONS = [...KPI_DEFS, { key: 'ltv180', label: 'LTV180 por safra de aquisição', kind: 'brl' }];
+  const SPECIAL_MONTHS = new Set(['03', '11', '12']);
+  const monthOf = cohortMonth => cohortMonth.slice(5, 7);
+  const isSpecialMonth = cohortMonth => SPECIAL_MONTHS.has(monthOf(cohortMonth));
+  const hexToRgba = (hex, alpha) => {
+    const n = parseInt(hex.replace('#',''), 16);
+    return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${alpha})`;
+  };
+
+  let MONTHLY = [], LTV = [], COHORT_SIZES = [], LAST_MATRIX_ROWS = [];
+  let METRIC_RANGE = '12';
+
+  function getRefMonth() { return document.getElementById('rc-f-ref-month').value; }
+  function ltvEligible(refMonth) { return LTV.filter(r => r.cohort_month < refMonth); }
+
+  function weightedLtv(rows) {
+    const totalClientes = rows.reduce((s, r) => s + r.clientes_na_cohort, 0);
+    const media = totalClientes > 0
+      ? rows.reduce((s, r) => s + r.ltv_180_medio * r.clientes_na_cohort, 0) / totalClientes
+      : null;
+    return { media, totalClientes };
+  }
+  function ltvRecentAvg(refMonth) {
+    const eligible = ltvEligible(refMonth);
+    const recent = eligible.slice(-6);
+    if (!recent.length) return null;
+    const current = weightedLtv(recent);
+    const previousRows = eligible.slice(-12, -6);
+    const previous = previousRows.length ? weightedLtv(previousRows) : null;
+    return { ...current, recent, previous: previous ? previous.media : null };
+  }
+
+  async function fetchMonthly() {
+    const { data, error } = await _sb.from('fact_repurchase_monthly_metrics').select('*').order('month');
+    if (error) throw error;
+    return data;
+  }
+  async function fetchLtv() {
+    const { data, error } = await _sb.from('mv_repurchase_ltv180').select('*').order('cohort_month');
+    if (error) throw error;
+    return data;
+  }
+  async function fetchCohortSizes() {
+    const { data, error } = await _sb.from('vw_repurchase_cohort_sizes').select('*').order('cohort_month');
+    if (error) throw error;
+    return data;
+  }
+  async function fetchCohortMatrixAll() {
+    const pageSize = 1000;
+    let offset = 0;
+    const all = [];
+    while (true) {
+      const { data, error } = await _sb.from('mv_repurchase_cohort_matrix')
+        .select('cohort_month,offset_months,transacoes_recompra')
+        .gte('offset_months', 0)
+        .order('cohort_month')
+        .order('offset_months')
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      all.push(...data);
+      if (data.length < pageSize) break;
+      offset += pageSize;
+    }
+    return all;
+  }
+
+  function renderKpis() {
+    const grid = document.getElementById('rc-kpi-grid');
+    grid.innerHTML = '';
+    const refMonth = getRefMonth();
+    const idx = MONTHLY.findIndex(m => m.month === refMonth);
+    const last = MONTHLY[idx] || MONTHLY[MONTHLY.length - 1];
+    const prev = idx > 0 ? MONTHLY[idx - 1] : null;
+    document.getElementById('rc-latest-month-label').textContent =
+      '· ' + fmtMonth(last.month) + (prev ? ' (vs ' + fmtMonth(prev.month) + ')' : ' (sem mês anterior)');
+
+    KPI_DEFS.forEach(def => {
+      const cur = last[def.key], prv = prev ? prev[def.key] : null;
+      const fmt = def.kind === 'pct' ? fmtPct1 : fmtInt;
+      const d = (cur != null && prv != null) ? cur - prv : null;
+      const isUp = d != null && d > 0;
+      const isGood = d == null ? null : (def.goodUp ? d > 0 : d < 0);
+      const deltaClass = d == null ? '' : (isGood ? 'up' : 'down');
+      const arrow = d == null ? '' : (isUp ? '▲' : (d < 0 ? '▼' : '—'));
+      const deltaText = d == null ? '' : (def.kind === 'pct'
+        ? (d>=0?'+':'') + (d*100).toFixed(1).replace('.',',') + 'pp'
+        : (d>=0?'+':'') + Math.round(d).toLocaleString('pt-BR'));
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="card-title"><span>${def.label}</span></div>
+        <div class="kpi-value">${fmt(cur)}</div>
+        <div class="delta ${deltaClass}">${arrow} ${deltaText} <span style="font-weight:400;opacity:.75">vs mês ant.</span></div>
+      `;
+      grid.appendChild(card);
+    });
+
+    renderLtvKpiCard();
+  }
+
+  function renderLtvKpiCard() {
+    const refMonth = getRefMonth();
+    const result = ltvRecentAvg(refMonth);
+    const card = document.createElement('div');
+    card.className = 'card';
+    if (!result) {
+      card.innerHTML = `
+        <div class="card-title"><span>LTV180 médio · últimas 6 safras</span></div>
+        <div class="kpi-value">—</div>
+        <div style="font-size:11px;color:var(--muted)">Sem safras com 180 dias completos antes de ${fmtMonth(refMonth)}</div>
+      `;
+    } else {
+      const d = result.previous != null ? result.media - result.previous : null;
+      const deltaClass = d == null ? '' : (d > 0 ? 'up' : 'down');
+      const arrow = d == null ? '' : (d > 0 ? '▲' : (d < 0 ? '▼' : '—'));
+      const deltaText = d == null ? 'Sem janela anterior pra comparar' :
+        (d>=0?'+':'') + fmtBRLfull(Math.abs(d)) + ' vs. 6 safras anteriores';
+      card.innerHTML = `
+        <div class="card-title"><span>LTV180 médio · últimas 6 safras antes de ${fmtMonth(refMonth)}</span></div>
+        <div class="kpi-value">${fmtBRLfull(result.media)}</div>
+        <div class="delta ${deltaClass}">${arrow} ${deltaText}</div>
+      `;
+    }
+    document.getElementById('rc-kpi-grid').appendChild(card);
+  }
+
+  function renderMetricSelector() {
+    const sel = document.getElementById('rc-f-metric');
+    sel.innerHTML = METRIC_OPTIONS.map(d => `<option value="${d.key}">${d.label}</option>`).join('');
+    sel.addEventListener('change', renderMetricChart);
+
+    document.querySelectorAll('#page-recompra .range-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        METRIC_RANGE = btn.dataset.range;
+        document.querySelectorAll('#page-recompra .range-btn').forEach(b => b.classList.toggle('active', b === btn));
+        renderMetricChart();
+      });
+    });
+
+    renderMetricChart();
+  }
+
+  function renderMetricChart() {
+    const key = document.getElementById('rc-f-metric').value;
+    const def = METRIC_OPTIONS.find(d => d.key === key);
+
+    const isLtv = key === 'ltv180';
+    const fullSeries = isLtv
+      ? ltvEligible(getRefMonth()).map(r => ({ label: fmtMonth(r.cohort_month), value: r.ltv_180_medio }))
+      : MONTHLY.map(m => ({ label: fmtMonth(m.month), value: m[key] }));
+
+    const series = METRIC_RANGE === '12' ? fullSeries.slice(-12) : fullSeries;
+    const labels = series.map(s => s.label);
+    const values = series.map(s => s.value);
+
+    const color = isLtv ? '#2563eb' : (def.goodUp ? '#10b981' : '#ef4444');
+    const fmtVal = v => isLtv ? fmtBRLfull(v) : (def.kind === 'pct' ? fmtPct1(v) : fmtInt(v));
+    const titlePrefix = isLtv ? 'Safra: ' : 'Mês: ';
+
+    mkChart('rc-chart-metric', {
+      type: 'line',
+      data: { labels, datasets: [{
+        label: def.label, data: values,
+        borderColor: color, backgroundColor: hexToRgba(color, .08),
+        borderWidth: 2, pointRadius: METRIC_RANGE === '12' ? 3 : 0, pointHoverRadius: 5, pointHoverBackgroundColor: color,
+        tension: 0.25, fill: true,
+      }]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            displayColors: false,
+            callbacks: {
+              title: items => titlePrefix + items[0].label,
+              label: c => def.label + ': ' + fmtVal(c.parsed.y),
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: METRIC_RANGE === '12'
+              ? { font: { size: 10 }, maxRotation: 0, autoSkip: false }
+              : { font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 24 },
+          },
+          y: { ticks: { callback: v => fmtVal(v) }, grid: { color: '#f1f4f8' } },
+        }
+      }
+    });
+  }
+
+  function renderLtvChart() {
+    const labels = LTV.map(r => fmtMonth(r.cohort_month));
+    mkChart('rc-chart-ltv', {
+      type: 'line',
+      data: { labels, datasets: [{
+        label: 'LTV180 médio', data: LTV.map(r => r.ltv_180_medio),
+        borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.08)',
+        borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: '#2563eb',
+        tension: 0.2, fill: true,
+      }]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            displayColors: false,
+            callbacks: {
+              title: items => 'Safra: ' + items[0].label,
+              label: c => 'LTV180: ' + fmtBRLfull(c.parsed.y),
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 16 } },
+          y: { ticks: { callback: v => fmtBRLfull(v) }, grid: { color: '#f1f4f8' } }
+        }
+      }
+    });
+  }
+
+  function renderRefMonthSelector() {
+    const months = MONTHLY.map(m => m.month);
+    const sel = document.getElementById('rc-f-ref-month');
+    sel.innerHTML = months.map(m => `<option value="${m}">${fmtMonth(m)}</option>`).join('');
+    sel.value = months[months.length - 1];
+    sel.addEventListener('change', onRefMonthChange);
+  }
+
+  function onRefMonthChange() {
+    const refMonth = getRefMonth();
+    renderKpis();
+    renderCohortTable(LAST_MATRIX_ROWS, refMonth);
+    renderMetricChart();
+  }
+
+  function renderCohortTable(matrixRows, refMonth) {
+    LAST_MATRIX_ROWS = matrixRows;
+    const view = document.getElementById('rc-f-cohort-view').value;
+    const byCohort = {};
+    matrixRows.forEach(r => {
+      (byCohort[r.cohort_month] = byCohort[r.cohort_month] || {})[r.offset_months] = r.transacoes_recompra;
+    });
+
+    const visibleCohorts = COHORT_SIZES.filter(c => c.cohort_month <= refMonth);
+    const maxOffset = matrixRows.reduce((m, r) => Math.max(m, r.offset_months), 0);
+    const offsetCols = Array.from({ length: maxOffset + 1 }, (_, i) => i);
+    document.getElementById('rc-ref-month-hint').textContent = `${visibleCohorts.length} safras visíveis até ${fmtMonth(refMonth)}`;
+
+    const sizeByMonth = {};
+    visibleCohorts.forEach(c => { sizeByMonth[c.cohort_month] = c.clientes_adquiridos; });
+
+    function valueFor(cohort_month, o) {
+      const count = (byCohort[cohort_month] || {})[o];
+      if (count == null) return null;
+      if (view === 'count') return count;
+      const size = sizeByMonth[cohort_month];
+      return size ? (count / size) * 100 : 0;
+    }
+    const fmtCell = view === 'count' ? (v => fmtInt(v)) : (v => v.toFixed(1).replace('.', ',') + '%');
+
+    const normalBaselineByOffset = {};
+    offsetCols.forEach(o => {
+      const vals = visibleCohorts
+        .filter(c => !isSpecialMonth(c.cohort_month))
+        .map(c => valueFor(c.cohort_month, o))
+        .filter(v => v != null);
+      normalBaselineByOffset[o] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    });
+
+    function sameMonthBaseline(cohort_month, o) {
+      const mm = monthOf(cohort_month);
+      const vals = visibleCohorts
+        .filter(c => c.cohort_month !== cohort_month && monthOf(c.cohort_month) === mm)
+        .map(c => valueFor(c.cohort_month, o))
+        .filter(v => v != null);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    }
+
+    function cellColor(val, baseline) {
+      if (baseline == null || baseline === 0) return null;
+      const ratio = val / baseline;
+      if (ratio > 1.2) return { bg: 'rgba(16,185,129,.16)', fg: '#0a6b47' };
+      if (ratio < 0.8) return { bg: 'rgba(239,68,68,.14)', fg: '#a3241a' };
+      return { bg: 'rgba(245,158,11,.16)', fg: '#8a5a09' };
+    }
+
+    const table = document.getElementById('rc-table-cohort');
+    table.innerHTML = '<thead><tr><th>Mês de aquisição</th><th>Clientes adquiridos</th>' +
+      offsetCols.map(o => `<th>M${o}</th>`).join('') + '</tr></thead>';
+
+    const tbody = document.createElement('tbody');
+    visibleCohorts.forEach(({ cohort_month, clientes_adquiridos }) => {
+      const special = isSpecialMonth(cohort_month);
+      const cells = offsetCols.map(o => {
+        const val = valueFor(cohort_month, o);
+        if (val == null) return '<td>—</td>';
+        const baseline = special ? sameMonthBaseline(cohort_month, o) : normalBaselineByOffset[o];
+        const color = cellColor(val, baseline);
+        const style = color ? `background:${color.bg};color:${color.fg};font-weight:600` : '';
+        return `<td style="${style}">${fmtCell(val)}</td>`;
+      }).join('');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${fmtMonth(cohort_month)}${special ? ' <span style="color:var(--muted);font-size:10px">(especial)</span>' : ''}</td><td>${fmtInt(clientes_adquiridos)}</td>${cells}`;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+  }
+
+  (async function renderAll() {
+    document.getElementById('rc-kpi-grid').innerHTML = '<div class="empty-note" style="grid-column:1/-1">Carregando dados...</div>';
+    let matrixRows;
+    try {
+      [MONTHLY, LTV, COHORT_SIZES, matrixRows] = await Promise.all([
+        fetchMonthly(), fetchLtv(), fetchCohortSizes(), fetchCohortMatrixAll(),
+      ]);
+    } catch (err) {
+      document.getElementById('rc-kpi-grid').innerHTML = `<div class="error-note" style="grid-column:1/-1">Erro ao carregar: ${err.message}</div>`;
+      return;
+    }
+    renderRefMonthSelector();
+    renderKpis();
+    renderMetricSelector();
+    renderLtvChart();
+    document.getElementById('rc-f-cohort-view').addEventListener('change', () => renderCohortTable(LAST_MATRIX_ROWS, getRefMonth()));
+    renderCohortTable(matrixRows, getRefMonth());
+  })();
+}
+</script>
 
 </body>
 </html>

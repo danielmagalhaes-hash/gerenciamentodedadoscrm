@@ -1,7 +1,7 @@
 # ARCHITECTURE.md — Dashboard CRM · Minimal Club
 
 > Mapa vivo do sistema. Lido em TODA sessão. Atualizado ao FIM de toda sessão.
-> Última atualização: 2026-06-09
+> Última atualização: 2026-07-21
 
 ---
 
@@ -141,6 +141,16 @@ O resultado: dados de Shopify, Klaviyo e GA4 aparecem unificados num único pain
 - **Migration:** `supabase/migrations/20260710000042_chatflux_wpp_fluxo.sql`
 - **Spec:** `Gerenciador de CRM/docs/specs/chatflux-wpp-fluxo.md`
 - **Estado:** ✅ implementado e validado (ingestão local + views conferidas no banco)
+
+#### ingestion-repurchase (implementado — 2026-07-21)
+- **Responsabilidade:** Backfill histórico + recarga diária de `fact_repurchase_deals` (negócios Shopify + comercial, base única e separada de `fact_orders`/`fact_order_history_*`, usada exclusivamente para métricas de recompra/churn/reativação) e cálculo da série mensal dessas métricas
+- **Entry point:** `api/cron/repurchase.py` → `ingestion/main_repurchase_deals.py:run_repurchase_deals_diario()`
+- **Fontes:** planilha Google Sheets "Base de Dados" (`ingestion/sources/repurchase_deals_sheets.py`, atualiza de madrugada via BigQuery Connected Sheet — `GOOGLE_SHEETS_REPURCHASE_SPREADSHEET_ID`); backfill histórico one-time via `ingestion/backfill/load_repurchase_deals_historico.py` a partir do export `Todos os negócios - Minimal - BQ. v2.csv` (2021-03-18 a 2026-06-30)
+- **Cálculo:** `ingestion/analytics/repurchase_monthly_metrics.py` — série mensal (Ativos, Recentes, Inativos, Em risco M11/M12, Churn, Repetição, Reativação), reimplementação sem pandas do script já validado em 2026-07-13 (`Análises - Base de Dados Extras/modelo_recompra_taxas.py`)
+- **Cron:** `0 5 * * *` — todo dia às 05:00 UTC (madrugada, depois do refresh da planilha)
+- **maxDuration:** 800s (fetch+dedup de ~470k linhas é o gargalo, ~2min)
+- **Dashboard:** aba "🔁 Recompra" (`data-page="recompra"`) dentro do próprio `dashboard-crm.html` — não é página separada
+- **Estado:** ✅ implementado; primeira execução automática do cron ainda não confirmada em produção
 
 ### Diagrama (ASCII)
 
@@ -439,6 +449,60 @@ Histórico de pedidos por e-mail desde 2021 (planilha Google Sheets/BigQuery, se
 
 ---
 
+#### fact_repurchase_deals
+Negócios (Shopify "Shipped" + comercial) usados **exclusivamente** para métricas de recompra/churn/reativação — combina histórico (CSV do BigQuery) + planilha diária. Separada de `fact_orders` e de `fact_order_history_*` (não os substitui, não os alimenta).
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| email | text | — |
+| closed_at | date | Data de fechamento do negócio |
+| amount_brl | numeric(12,2) | — |
+| is_first_purchase | boolean | Nulo quando a fonte não classifica (tipo_de_venda em branco — ~2% da fonte bruta, quase tudo fora do escopo Shipped/Comercial) |
+| deal_stage | text | CHECK IN ('Shipped', 'Negócio Fechado - Comercial') |
+| first_purchase_date_raw | date | Só referência — a Instrução de Coortes do projeto já identificou como inconsistente; 1ª compra real é recalculada nas materialized views |
+| source | text | CHECK IN ('bq_historico', 'sheets_diario') |
+| ingested_at | timestamptz | — |
+
+- **(email, closed_at) não é único** — negócios com múltiplos itens geram várias linhas; toda análise trata esse par como o negócio único (soma valor, agrega classificação)
+- **Carga:** `bq_historico` — backfill único (2021-03-18 a 2026-06-30, 456.803 linhas), nunca mais tocado depois de carregado. `sheets_diario` — recarregado por completo a cada cron (delete por janela de 30 dias + insert), ~13k linhas e crescendo
+- **RLS:** SELECT anon; INSERT/DELETE service_role
+
+---
+
+#### fact_repurchase_monthly_metrics
+Série mensal calculada em **Python** (não SQL) — recarregada por completo a cada cron a partir de `fact_repurchase_deals`.
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| month | date | PK |
+| clientes_ativos | integer | Compraram nos últimos 12 meses − recentes |
+| clientes_recentes | integer | 1ª compra nos últimos 6 meses |
+| clientes_inativos | integer | Mais de 12 meses sem comprar |
+| clientes_em_risco_m11_m12 | integer | Tempo desde a última compra em 11 ou 12 meses |
+| clientes_novos / clientes_reentrantes / clientes_churn | integer | — |
+| taxa_churn / taxa_repeticao / taxa_reativacao | numeric(7,4) | **Nomenclatura confirmada com Daniel em 2026-07-21** — `taxa_repeticao` é o que a sessão de 2026-07-13 chamava de "tx_reativacao"; ignorar os termos daquela sessão anterior |
+| compras_de_inativos | integer | Mesmo valor de `clientes_reentrantes` (é o evento de reativação) |
+| ingested_at | timestamptz | — |
+
+---
+
+#### Materialized views de recompra
+Todas materializadas (não views simples) porque a role `anon` tem `statement_timeout` mais curto que `service_role` — consultas com JOIN+GROUP BY sobre a base de ~470k linhas estouravam mesmo funcionando com service_role.
+
+| View | O que entrega |
+|---|---|
+| `mv_repurchase_deals_dedup` | `fact_repurchase_deals` agrupado por (email, closed_at) — SUM(amount_brl), bool_or(is_first_purchase) |
+| `mv_repurchase_customer_first_purchase` | 1ª compra real recalculada por cliente (MIN(closed_at) onde is_first_purchase; fallback MIN geral) |
+| `mv_repurchase_cohort_matrix` | Matriz de coortes completa (cohort_month, offset_months, transacoes_recompra) — sem limite de offset (safra mais antiga chega a M63) |
+| `mv_repurchase_ltv180` | LTV180 médio por safra de aquisição (só safras com os 180 dias já completos) |
+
+- Também existe `vw_repurchase_cohort_sizes` (view simples, leve, 1 linha por mês) para popular seletores sem carregar a matriz inteira
+- **Refresh:** função `refresh_repurchase_materialized_views()` (SECURITY DEFINER, `statement_timeout='5min'` — o padrão da role é curto demais para um REFRESH sobre essa base) chamada via RPC ao fim do cron diário
+- **Consulta > 1000 linhas:** `mv_repurchase_cohort_matrix` completa passa de 2000 linhas — o cliente (dashboard) pagina de verdade com `.range()` em loop; o servidor ignora `.range()` maior que 1000 numa única chamada
+
+---
+
 ### Tabelas de comunidade (criadas — aguardando dados)
 
 #### fact_community_actions
@@ -619,6 +683,10 @@ Analytics de crescimento por release por dia — entradas, saídas e cliques.
 | 2026-06-09 | Botão manual "↻ Atualizar D-1" no dashboard (E-mail Fluxo) | Cron email_flow continua recebendo rate limit do Klaviyo; botão permite atualização sob demanda sem depender do cron | — |
 | 2026-06-09 | Configuração de UTM via formulário estruturado no dashboard | Substituiu textarea freeform + dependência de sessão com Claude; grava direto em `flow_utm_config` via `POST /admin/utm-config` com service_role_key | — |
 | 2026-07-02 | `fact_order_history_items` como tabela isolada, alimentada por backfill manual de CSV (não API/cron) | Análise de recompra/LTV precisa de produto por pedido, que `fact_orders` não guarda; evitar tocar na tabela de receita/atribuição já validada | Se precisar de produto em tempo real no dashboard, exigirá cron dedicado lendo a API de Orders do Shopify (não só o webhook/API atual usada por `fact_orders`) |
+| 2026-07-21 | `fact_repurchase_deals` como base única de recompra (Shopify+comercial), separada de `fact_orders`/`fact_order_history_*` | Recompra precisa combinar Shopify com vendas comerciais (Mercado Livre, loja física, B2B ficam fora do escopo — só `Shipped` + `Negócio Fechado - Comercial`) | As 5 materialized views antigas de LTV (`mv_customer_ltv_windows` etc., só Shopify) ficaram obsoletas para recompra — não foram removidas, mas não devem mais ser usadas para essa finalidade |
+| 2026-07-21 | Série mensal de recompra calculada em Python (`ingestion/analytics/`), não em SQL | Reaproveita lógica já validada (bug de rollforward corrigido em 2026-07-13); menor risco que reimplementar a simulação mês-a-mês em SQL puro | Mudança na definição de churn/ativos precisa mexer em `ingestion/analytics/repurchase_monthly_metrics.py`, não numa view |
+| 2026-07-21 | 4 materialized views para recompra (não views simples) | `anon` key tem `statement_timeout` mais curto que `service_role`; JOIN+GROUP BY sobre ~470k linhas estourava mesmo funcionando com service_role | Toda mudança na definição dessas views exige `REFRESH MATERIALIZED VIEW` — já automatizado via RPC no cron diário |
+| 2026-07-21 | Aba "Recompra" embutida em `dashboard-crm.html` (não página separada) | Pedido explícito do Daniel — mesma URL, mesmo padrão do "Log CRM" (lazy-load no primeiro clique) | Todo código da aba precisa rodar numa IIFE e reusar `_sb`/`fmtInt`/`fmtPct1`/`fmtBRLfull`/`mkChart` já globais — nunca redeclarar esses nomes |
 
 ---
 
@@ -652,6 +720,16 @@ Analytics de crescimento por release por dia — entradas, saídas e cliques.
 - **Risco:** dados de saúde da base são coletados mas não exibidos (dashboard usa valores hardcoded)
 - **Plano:** substituir mock por `vw_email_health` na próxima versão
 
+### Paginação sem ORDER BY em `ingestion/db/writers.py` (bug pré-existente, ainda não corrigido)
+- **Risco:** `get_asset_item_map`, o loop interno de `get_synced_campaign_ids` e `get_campaign_to_item_map` paginam com `.range()` sem `.order()` — sem ordem estável, o Postgres pode repetir ou pular linhas entre páginas, corrompendo os mapas de e-mail/campanha do Klaviyo silenciosamente
+- **Encontrado:** 2026-07-21, depurando um bug idêntico na feature de recompra (o mesmo padrão causou dedup incorreto lá — ver `ingestion/analytics/repurchase_monthly_metrics.py`, que já tem `.order("id")`)
+- **Ainda não corrigido** nessas 3 chamadas — não afeta a feature de recompra, só métricas de e-mail/campanha
+- **Plano:** adicionar `.order("id")` nas 3 chamadas numa sessão futura, com o Daniel ciente antes de mexer
+
+### statement_timeout da role anon menor que o esperado
+- **Risco:** views com JOIN+GROUP BY sobre bases grandes (ex.: ~470k linhas da recompra) podem estourar timeout consultando com a `anon` key mesmo funcionando normalmente com `service_role` — só aparece testando com a chave certa
+- **Mitigação:** materializar a view resolve; **sempre testar consultas novas com a `anon` key** antes de considerar uma view pronta (testar só com service_role não pega esse problema)
+
 ---
 
 ## 7. Inventário de arquivos críticos
@@ -676,6 +754,11 @@ Analytics de crescimento por release por dia — entradas, saídas e cliques.
 | `supabase/migrations/` | Schema do banco versionado | NUNCA editar migration já aplicada — sempre criar nova |
 | `ingestion/backfill/load_order_history.py` | Backfill manual (não cron) de `fact_order_history_items` a partir de export CSV do Shopify | Claude ao rodar novo backfill; sempre `--dry-run` antes |
 | `ingestion/backfill/load_order_history_legacy.py` | Backfill manual (não cron) de `fact_order_history_legacy` a partir da planilha de pedidos por e-mail (truncate + insert completo) | Claude ao recarregar; sempre `--dry-run` antes |
+| `ingestion/analytics/repurchase_monthly_metrics.py` | Série mensal de churn/ativos/reativação (sem pandas) | Claude com cuidado — lógica sensível, já teve bug de rollforward corrigido antes de existir aqui |
+| `ingestion/sources/repurchase_deals_sheets.py` | Lê a planilha diária "Base de Dados" da recompra | Claude ao ajustar colunas/formato |
+| `ingestion/backfill/load_repurchase_deals_historico.py` | Backfill manual (não cron) do histórico de recompra (2021-2026) | Roda uma vez só — não deveria rodar de novo |
+| `ingestion/main_repurchase_deals.py` | Orquestra o cron diário de recompra (planilha → banco → métricas → refresh das views) | Claude ao ajustar a ordem/etapas do cron |
+| `api/cron/repurchase.py` | Entry point do cron de recompra | Claude ao ajustar janela |
 | `vercel.json` | Crons, routing, maxDuration | Claude ao adicionar cron ou ajustar timeout |
 | `.env` | Credenciais reais | Apenas Daniel — Claude nunca lê nem commita |
 | `PRODUCT.md` | Fonte de verdade do domínio | Claude + Daniel quando produto muda |
