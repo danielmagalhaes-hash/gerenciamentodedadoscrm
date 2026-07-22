@@ -1,0 +1,46 @@
+# macOS
+.DS_Store
+
+# Ambiente / segredos
+.env
+.env.local
+.env.*.local
+*.key
+
+# Configuração local do Claude Code (pessoal, não versionar)
+.claude/settings.local.json
+
+# Python (Modo A — análise de dados)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Node (Modo B — construção, quando houver)
+node_modules/
+dist/
+build/
+.next/
+
+# Saídas temporárias de análise
+*.tmp
+*.log
+
+# Correções locais de custo feitas pelo João no painel (estado local, não versionar)
+custos_extra.csv
+
+# Base HubSpot da V4 (coortes) — export mensal do BigQuery; contém e-mail (dado pessoal), NÃO versionar
+hubspot_deals.csv
+
+# Base histórica de itens (CMV real da história inteira) — export do BigQuery, 119 MB e
+# contém e-mail (dado pessoal). NÃO versionar. Ausência não derruba o painel (degrada p/ 30%).
+itens_historico.csv
+
+# Configuração pessoal do Obsidian (não versionar)
+.obsidian/
+
+# Material de estudo pessoal / notas e prints do Obsidian (não versionar)
+Pasted image *.png
+Curso Pedrinho.md
+Auditoria de custos.md
