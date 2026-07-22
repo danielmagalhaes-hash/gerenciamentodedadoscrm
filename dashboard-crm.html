@@ -162,6 +162,8 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
 .log-search-row select:focus,.log-search-row input:focus{outline:none;border-color:var(--primary)}
 .table-wrap{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
 .table-wrap table{width:100%;border-collapse:collapse;font-size:12.5px}
+.table-wrap.table-scroll-x{overflow-x:auto}
+.table-wrap.table-scroll-x table{width:max-content;min-width:100%}
 .table-wrap thead th{background:#f8fafc;text-align:left;padding:11px 14px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;border-bottom:1px solid var(--border)}
 .table-wrap tbody td{padding:12px 14px;border-bottom:1px solid #f1f4f8;vertical-align:middle}
 .table-wrap tbody tr{cursor:pointer;transition:background .12s}
@@ -705,11 +707,6 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
     <div class="chart-box lg"><canvas id="rc-chart-metric"></canvas></div>
   </div>
 
-  <div class="section-title">LTV 180 dias por safra de aquisição <span class="hint">receita média por cliente nos 180 dias após a 1ª compra</span></div>
-  <div class="card">
-    <div class="chart-box"><canvas id="rc-chart-ltv"></canvas></div>
-  </div>
-
   <div class="section-title">Matriz de coortes <span class="hint">até o mês de referência selecionado acima</span></div>
   <div class="card">
     <div class="card-title">
@@ -727,7 +724,7 @@ tr.nested td:first-child{padding-left:36px;color:var(--muted)}
         <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#ef4444;margin-right:4px"></span>-20%</span>
       </span>
     </div>
-    <div class="table-wrap">
+    <div class="table-wrap table-scroll-x">
       <table id="rc-table-cohort"></table>
     </div>
   </div>
@@ -4621,37 +4618,6 @@ function initRecompraTab() {
     });
   }
 
-  function renderLtvChart() {
-    const labels = LTV.map(r => fmtMonth(r.cohort_month));
-    mkChart('rc-chart-ltv', {
-      type: 'line',
-      data: { labels, datasets: [{
-        label: 'LTV180 médio', data: LTV.map(r => r.ltv_180_medio),
-        borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.08)',
-        borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: '#2563eb',
-        tension: 0.2, fill: true,
-      }]},
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            displayColors: false,
-            callbacks: {
-              title: items => 'Safra: ' + items[0].label,
-              label: c => 'LTV180: ' + fmtBRLfull(c.parsed.y),
-            }
-          }
-        },
-        scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 16 } },
-          y: { ticks: { callback: v => fmtBRLfull(v) }, grid: { color: '#f1f4f8' } }
-        }
-      }
-    });
-  }
-
   function renderRefMonthSelector() {
     const months = MONTHLY.map(m => m.month);
     const sel = document.getElementById('rc-f-ref-month');
@@ -4750,7 +4716,6 @@ function initRecompraTab() {
       renderRefMonthSelector();
       renderKpis();
       renderMetricSelector();
-      renderLtvChart();
       document.getElementById('rc-f-cohort-view').addEventListener('change', () => renderCohortTable(LAST_MATRIX_ROWS, getRefMonth()));
       renderCohortTable(matrixRows, getRefMonth());
     } catch (err) {
