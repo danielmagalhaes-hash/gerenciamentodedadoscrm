@@ -4256,8 +4256,8 @@ async function fetchAndRenderMetas() {
   const now   = new Date();
   const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
   const [goalsResp, paceResp] = await Promise.all([
-    supabase.from('fact_monthly_goals').select('*').eq('month', month).maybeSingle(),
-    supabase.from('vw_pace_vs_goals').select('*').eq('month', month).maybeSingle(),
+    _sb.from('fact_monthly_goals').select('*').eq('month', month).maybeSingle(),
+    _sb.from('vw_pace_vs_goals').select('*').eq('month', month).maybeSingle(),
   ]);
   window._metasData  = goalsResp.data || null;
   window._paceData   = paceResp.data  || null;
