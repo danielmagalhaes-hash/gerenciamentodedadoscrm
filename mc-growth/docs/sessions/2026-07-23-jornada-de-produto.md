@@ -76,28 +76,28 @@ Cada COMPRA (não o cliente) é classificada em um dos 3 momentos: **Recente** (
 
 ## LTV, repetição e reativação — as 20 entradas
 
-| Entrada | Clientes | LTV 180d (mediana) | LTV 180d (média) | Taxa repetição | Taxa reativação | Recente hoje | Ativo hoje | Inativo hoje |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Camiseta Minimal (4 un) | 84.413 | R$ 457.23 | R$ 565.99 | 13.8% | 11.2% | 12.9% | 35.7% | 51.4% |
-| Camiseta Minimal (1 un) | 60.803 | R$ 147.01 | R$ 243.32 | 12.9% | 10.0% | 8.5% | 24.5% | 67.0% |
-| Camiseta Minimal (outras qtd) | 38.274 | R$ 422.77 | R$ 559.62 | 15.9% | 12.4% | 5.6% | 33.1% | 61.3% |
-| Camiseta + Carteira | 5.933 | R$ 473.35 | R$ 582.39 | 1.2% | 0.3% | 73.5% | 21.4% | 5.1% |
-| Calça Jeans 1.0 | 5.804 | R$ 369.07 | R$ 588.71 | 8.4% | 1.7% | 29.9% | 40.2% | 29.9% |
-| Camiseta Minimal (6 un) | 5.130 | R$ 669.50 | R$ 793.26 | 13.1% | 8.9% | 7.8% | 40.6% | 51.5% |
-| Camiseta + Jeans | 3.833 | R$ 752.71 | R$ 920.47 | 10.4% | 2.4% | 19.1% | 53.5% | 27.4% |
-| Camiseta + Cueca | 3.475 | R$ 568.22 | R$ 697.00 | 20.6% | 18.1% | 6.9% | 28.9% | 64.2% |
-| Camisa Social Tech Classics | 3.284 | R$ 629.87 | R$ 753.25 | 9.0% | 3.6% | 15.5% | 37.5% | 47.0% |
-| Camiseta + Camiseta Fitness | 3.270 | R$ 602.02 | R$ 750.97 | 13.4% | 7.7% | 13.9% | 35.7% | 50.4% |
-| Camiseta Fitness | 3.233 | R$ 344.67 | R$ 424.41 | 10.5% | 7.1% | 11.5% | 29.2% | 59.3% |
-| Overshirt | 2.711 | R$ 391.56 | R$ 510.09 | 2.7% | 0.5% | 73.9% | 14.6% | 11.4% |
-| Outros Produtos | 2.141 | R$ 398.32 | R$ 480.04 | 10.6% | 7.5% | 7.7% | 21.3% | 70.9% |
-| Cueca | 1.990 | R$ 351.31 | R$ 396.40 | 17.8% | 19.9% | 5.3% | 19.0% | 75.6% |
-| Calça Comfort | 1.793 | R$ 499.90 | R$ 814.29 | 2.1% | 0.0% | 67.0% | 32.2% | 0.7% |
-| Camiseta Manga Longa | 1.790 | R$ 335.80 | R$ 436.40 | 17.9% | 13.3% | 5.4% | 20.4% | 74.2% |
-| Camisa Henley | 1.488 | R$ 406.50 | R$ 517.25 | 8.3% | 1.4% | 20.0% | 38.0% | 42.0% |
-| Camiseta + Perfume | 1.435 | R$ 482.23 | R$ 723.93 | 4.9% | 2.4% | 62.4% | 16.6% | 21.0% |
-| Camiseta + Social | 1.314 | R$ 880.31 | R$ 1123.95 | 14.9% | 5.5% | 6.8% | 47.1% | 46.0% |
-| Polo 2.0 | 1.043 | R$ 458.39 | R$ 581.17 | 0.9% | 0.0% | 57.0% | 43.0% | 0.0% |
+| Entrada                       | Clientes | LTV 180d (mediana) | LTV 180d (média) | Taxa repetição | Taxa reativação | Recente hoje | Ativo hoje | Inativo hoje |
+| ----------------------------- | -------: | -----------------: | ---------------: | -------------: | --------------: | -----------: | ---------: | -----------: |
+| Camiseta Minimal (4 un)       |   84.413 |          R$ 457.23 |        R$ 565.99 |          13.8% |           11.2% |        12.9% |      35.7% |        51.4% |
+| Camiseta Minimal (1 un)       |   60.803 |          R$ 147.01 |        R$ 243.32 |          12.9% |           10.0% |         8.5% |      24.5% |        67.0% |
+| Camiseta Minimal (outras qtd) |   38.274 |          R$ 422.77 |        R$ 559.62 |          15.9% |           12.4% |         5.6% |      33.1% |        61.3% |
+| Camiseta + Carteira           |    5.933 |          R$ 473.35 |        R$ 582.39 |           1.2% |            0.3% |        73.5% |      21.4% |         5.1% |
+| Calça Jeans 1.0               |    5.804 |          R$ 369.07 |        R$ 588.71 |           8.4% |            1.7% |        29.9% |      40.2% |        29.9% |
+| Camiseta Minimal (6 un)       |    5.130 |          R$ 669.50 |        R$ 793.26 |          13.1% |            8.9% |         7.8% |      40.6% |        51.5% |
+| Camiseta + Jeans              |    3.833 |          R$ 752.71 |        R$ 920.47 |          10.4% |            2.4% |        19.1% |      53.5% |        27.4% |
+| Camiseta + Cueca              |    3.475 |          R$ 568.22 |        R$ 697.00 |          20.6% |           18.1% |         6.9% |      28.9% |        64.2% |
+| Camisa Social Tech Classics   |    3.284 |          R$ 629.87 |        R$ 753.25 |           9.0% |            3.6% |        15.5% |      37.5% |        47.0% |
+| Camiseta + Camiseta Fitness   |    3.270 |          R$ 602.02 |        R$ 750.97 |          13.4% |            7.7% |        13.9% |      35.7% |        50.4% |
+| Camiseta Fitness              |    3.233 |          R$ 344.67 |        R$ 424.41 |          10.5% |            7.1% |        11.5% |      29.2% |        59.3% |
+| Overshirt                     |    2.711 |          R$ 391.56 |        R$ 510.09 |           2.7% |            0.5% |        73.9% |      14.6% |        11.4% |
+| Outros Produtos               |    2.141 |          R$ 398.32 |        R$ 480.04 |          10.6% |            7.5% |         7.7% |      21.3% |        70.9% |
+| Cueca                         |    1.990 |          R$ 351.31 |        R$ 396.40 |          17.8% |           19.9% |         5.3% |      19.0% |        75.6% |
+| Calça Comfort                 |    1.793 |          R$ 499.90 |        R$ 814.29 |           2.1% |            0.0% |        67.0% |      32.2% |         0.7% |
+| Camiseta Manga Longa          |    1.790 |          R$ 335.80 |        R$ 436.40 |          17.9% |           13.3% |         5.4% |      20.4% |        74.2% |
+| Camisa Henley                 |    1.488 |          R$ 406.50 |        R$ 517.25 |           8.3% |            1.4% |        20.0% |      38.0% |        42.0% |
+| Camiseta + Perfume            |    1.435 |          R$ 482.23 |        R$ 723.93 |           4.9% |            2.4% |        62.4% |      16.6% |        21.0% |
+| Camiseta + Social             |    1.314 |          R$ 880.31 |       R$ 1123.95 |          14.9% |            5.5% |         6.8% |      47.1% |        46.0% |
+| Polo 2.0                      |    1.043 |          R$ 458.39 |        R$ 581.17 |           0.9% |            0.0% |        57.0% |      43.0% |         0.0% |
 
 ---
 
@@ -110,36 +110,36 @@ Compras feitas ainda dentro do 1º semestre de vida do cliente (< 6 meses desde 
 
 **Camiseta Minimal (4 un)** — 14.400 clientes com compra tipo "Recente"
 
-| Produto | Clientes | % desse grupo |
-|---|---:|---:|
-| Camiseta Minimal | 11.420 | 79.31% |
-| Calça Jeans 1.0 | 1.266 | 8.79% |
-| Cueca | 864 | 6.00% |
-| Camiseta Fitness | 836 | 5.81% |
-| Outros Produtos | 810 | 5.62% |
-| Camiseta Manga Longa | 766 | 5.32% |
-| Camisa Social Tech Classics | 488 | 3.39% |
-| Carteira | 471 | 3.27% |
-| Perfume | 446 | 3.10% |
-| Calça Alfaiataria | 352 | 2.44% |
-| Camisa Henley | 349 | 2.42% |
-| Polo 2.0 | 347 | 2.41% |
-| Calça Comfort | 291 | 2.02% |
-| Overshirt | 158 | 1.10% |
-| Calça Jeans 2.0 | 143 | 0.99% |
-| Cueca Fitness | 98 | 0.68% |
-| Polo Tricot | 95 | 0.66% |
-| Suéter Classic 2026 | 80 | 0.56% |
-| Suéter Zíper | 80 | 0.56% |
-| Polo 1.0 | 64 | 0.44% |
-| Camisa Social Malha | 61 | 0.42% |
-| Camiseta Fitness Manga Longa | 47 | 0.33% |
-| Jaqueta Essential | 43 | 0.30% |
-| Camiseta Gola Alta Manga Longa | 29 | 0.20% |
-| Camiseta Modal Tech | 26 | 0.18% |
-| Calça Essential | 26 | 0.18% |
-| Jaqueta Westfield | 25 | 0.17% |
-| Camiseta Gola Alta Manga Curta | 15 | 0.10% |
+| Produto                        | Clientes | % desse grupo |
+| ------------------------------ | -------: | ------------: |
+| Camiseta Minimal               |   11.420 |        79.31% |
+| Calça Jeans 1.0                |    1.266 |         8.79% |
+| Cueca                          |      864 |         6.00% |
+| Camiseta Fitness               |      836 |         5.81% |
+| Outros Produtos                |      810 |         5.62% |
+| Camiseta Manga Longa           |      766 |         5.32% |
+| Camisa Social Tech Classics    |      488 |         3.39% |
+| Carteira                       |      471 |         3.27% |
+| Perfume                        |      446 |         3.10% |
+| Calça Alfaiataria              |      352 |         2.44% |
+| Camisa Henley                  |      349 |         2.42% |
+| Polo 2.0                       |      347 |         2.41% |
+| Calça Comfort                  |      291 |         2.02% |
+| Overshirt                      |      158 |         1.10% |
+| Calça Jeans 2.0                |      143 |         0.99% |
+| Cueca Fitness                  |       98 |         0.68% |
+| Polo Tricot                    |       95 |         0.66% |
+| Suéter Classic 2026            |       80 |         0.56% |
+| Suéter Zíper                   |       80 |         0.56% |
+| Polo 1.0                       |       64 |         0.44% |
+| Camisa Social Malha            |       61 |         0.42% |
+| Camiseta Fitness Manga Longa   |       47 |         0.33% |
+| Jaqueta Essential              |       43 |         0.30% |
+| Camiseta Gola Alta Manga Longa |       29 |         0.20% |
+| Camiseta Modal Tech            |       26 |         0.18% |
+| Calça Essential                |       26 |         0.18% |
+| Jaqueta Westfield              |       25 |         0.17% |
+| Camiseta Gola Alta Manga Curta |       15 |         0.10% |
 
 **Camiseta Minimal (1 un)** — 12.367 clientes com compra tipo "Recente"
 
@@ -719,69 +719,69 @@ Compras feitas depois do 1º semestre, dentro da janela de 11 meses desde a comp
 
 **Camiseta Minimal (4 un)** — 11.647 clientes com compra tipo "Repetição"
 
-| Produto | Clientes | % desse grupo |
-|---|---:|---:|
-| Camiseta Minimal | 9.322 | 80.04% |
-| Calça Jeans 1.0 | 1.568 | 13.46% |
-| Camiseta Fitness | 1.171 | 10.05% |
-| Outros Produtos | 1.086 | 9.32% |
-| Cueca | 873 | 7.50% |
-| Camiseta Manga Longa | 801 | 6.88% |
-| Camisa Social Tech Classics | 708 | 6.08% |
-| Carteira | 674 | 5.79% |
-| Perfume | 600 | 5.15% |
-| Calça Alfaiataria | 570 | 4.89% |
-| Camisa Henley | 502 | 4.31% |
-| Polo 2.0 | 473 | 4.06% |
-| Calça Comfort | 432 | 3.71% |
-| Overshirt | 402 | 3.45% |
-| Calça Jeans 2.0 | 250 | 2.15% |
-| Suéter Zíper | 221 | 1.90% |
-| Polo Tricot | 190 | 1.63% |
-| Suéter Classic 2026 | 177 | 1.52% |
-| Polo 1.0 | 176 | 1.51% |
-| Jaqueta Essential | 143 | 1.23% |
-| Cueca Fitness | 139 | 1.19% |
-| Camisa Social Malha | 104 | 0.89% |
-| Jaqueta Westfield | 88 | 0.76% |
-| Camiseta Gola Alta Manga Curta | 86 | 0.74% |
-| Camiseta Fitness Manga Longa | 80 | 0.69% |
-| Calça Essential | 78 | 0.67% |
-| Camiseta Modal Tech | 71 | 0.61% |
-| Camiseta Gola Alta Manga Longa | 70 | 0.60% |
+| Produto                        | Clientes | % desse grupo |
+| ------------------------------ | -------: | ------------: |
+| Camiseta Minimal               |    9.322 |        80.04% |
+| Calça Jeans 1.0                |    1.568 |        13.46% |
+| Camiseta Fitness               |    1.171 |        10.05% |
+| Outros Produtos                |    1.086 |         9.32% |
+| Cueca                          |      873 |         7.50% |
+| Camiseta Manga Longa           |      801 |         6.88% |
+| Camisa Social Tech Classics    |      708 |         6.08% |
+| Carteira                       |      674 |         5.79% |
+| Perfume                        |      600 |         5.15% |
+| Calça Alfaiataria              |      570 |         4.89% |
+| Camisa Henley                  |      502 |         4.31% |
+| Polo 2.0                       |      473 |         4.06% |
+| Calça Comfort                  |      432 |         3.71% |
+| Overshirt                      |      402 |         3.45% |
+| Calça Jeans 2.0                |      250 |         2.15% |
+| Suéter Zíper                   |      221 |         1.90% |
+| Polo Tricot                    |      190 |         1.63% |
+| Suéter Classic 2026            |      177 |         1.52% |
+| Polo 1.0                       |      176 |         1.51% |
+| Jaqueta Essential              |      143 |         1.23% |
+| Cueca Fitness                  |      139 |         1.19% |
+| Camisa Social Malha            |      104 |         0.89% |
+| Jaqueta Westfield              |       88 |         0.76% |
+| Camiseta Gola Alta Manga Curta |       86 |         0.74% |
+| Camiseta Fitness Manga Longa   |       80 |         0.69% |
+| Calça Essential                |       78 |         0.67% |
+| Camiseta Modal Tech            |       71 |         0.61% |
+| Camiseta Gola Alta Manga Longa |       70 |         0.60% |
 
 **Camiseta Minimal (1 un)** — 7.866 clientes com compra tipo "Repetição"
 
-| Produto | Clientes | % desse grupo |
-|---|---:|---:|
-| Camiseta Minimal | 6.395 | 81.30% |
-| Calça Jeans 1.0 | 934 | 11.87% |
-| Camiseta Fitness | 690 | 8.77% |
-| Outros Produtos | 599 | 7.62% |
-| Cueca | 507 | 6.45% |
-| Camiseta Manga Longa | 495 | 6.29% |
-| Camisa Social Tech Classics | 445 | 5.66% |
-| Calça Alfaiataria | 310 | 3.94% |
-| Polo 2.0 | 309 | 3.93% |
-| Camisa Henley | 294 | 3.74% |
-| Perfume | 261 | 3.32% |
-| Overshirt | 228 | 2.90% |
-| Calça Comfort | 226 | 2.87% |
-| Carteira | 223 | 2.83% |
-| Suéter Zíper | 117 | 1.49% |
-| Polo 1.0 | 112 | 1.42% |
-| Calça Jeans 2.0 | 110 | 1.40% |
-| Cueca Fitness | 100 | 1.27% |
-| Suéter Classic 2026 | 86 | 1.09% |
-| Polo Tricot | 84 | 1.07% |
-| Jaqueta Essential | 63 | 0.80% |
-| Camiseta Fitness Manga Longa | 62 | 0.79% |
-| Camiseta Gola Alta Manga Longa | 46 | 0.58% |
-| Camiseta Modal Tech | 37 | 0.47% |
-| Jaqueta Westfield | 36 | 0.46% |
-| Camisa Social Malha | 35 | 0.44% |
-| Camiseta Gola Alta Manga Curta | 33 | 0.42% |
-| Calça Essential | 31 | 0.39% |
+| Produto                        | Clientes | % desse grupo |
+| ------------------------------ | -------: | ------------: |
+| Camiseta Minimal               |    6.395 |        81.30% |
+| Calça Jeans 1.0                |      934 |        11.87% |
+| Camiseta Fitness               |      690 |         8.77% |
+| Outros Produtos                |      599 |         7.62% |
+| Cueca                          |      507 |         6.45% |
+| Camiseta Manga Longa           |      495 |         6.29% |
+| Camisa Social Tech Classics    |      445 |         5.66% |
+| Calça Alfaiataria              |      310 |         3.94% |
+| Polo 2.0                       |      309 |         3.93% |
+| Camisa Henley                  |      294 |         3.74% |
+| Perfume                        |      261 |         3.32% |
+| Overshirt                      |      228 |         2.90% |
+| Calça Comfort                  |      226 |         2.87% |
+| Carteira                       |      223 |         2.83% |
+| Suéter Zíper                   |      117 |         1.49% |
+| Polo 1.0                       |      112 |         1.42% |
+| Calça Jeans 2.0                |      110 |         1.40% |
+| Cueca Fitness                  |      100 |         1.27% |
+| Suéter Classic 2026            |       86 |         1.09% |
+| Polo Tricot                    |       84 |         1.07% |
+| Jaqueta Essential              |       63 |         0.80% |
+| Camiseta Fitness Manga Longa   |       62 |         0.79% |
+| Camiseta Gola Alta Manga Longa |       46 |         0.58% |
+| Camiseta Modal Tech            |       37 |         0.47% |
+| Jaqueta Westfield              |       36 |         0.46% |
+| Camisa Social Malha            |       35 |         0.44% |
+| Camiseta Gola Alta Manga Curta |       33 |         0.42% |
+| Calça Essential                |       31 |         0.39% |
 
 **Camiseta Minimal (outras qtd)** — 6.072 clientes com compra tipo "Repetição"
 
@@ -1785,135 +1785,135 @@ Tabelas completas (sem corte de top-N), direto de `afinidade_produtos.csv`. `% d
 
 **2ª compra** — 26.275 chegaram (68.9% não voltaram). retenção 24.0% · mediana acumulada **139 dias**. intervalo desde a anterior **139 dias**
 
-| Produto | Clientes | % da entrada |
-|---|---:|---:|
-| Camiseta Minimal **(entrada)** | 20.251 | 23.99% |
-| Calça Jeans 1.0 | 1.810 | 2.14% |
-| Camiseta Fitness | 1.209 | 1.43% |
-| Cueca | 1.138 | 1.35% |
-| Outros Produtos | 974 | 1.15% |
-| Camiseta Manga Longa | 971 | 1.15% |
-| Carteira | 764 | 0.91% |
-| Camisa Social Tech Classics | 722 | 0.86% |
-| Perfume | 624 | 0.74% |
-| Calça Alfaiataria | 482 | 0.57% |
-| Polo 2.0 | 447 | 0.53% |
-| Camisa Henley | 446 | 0.53% |
-| Calça Comfort | 394 | 0.47% |
-| Overshirt | 257 | 0.30% |
-| Calça Jeans 2.0 | 195 | 0.23% |
-| Cueca Fitness | 121 | 0.14% |
-| Suéter Zíper | 110 | 0.13% |
-| Suéter Classic 2026 | 102 | 0.12% |
-| Polo 1.0 | 95 | 0.11% |
-| Polo Tricot | 93 | 0.11% |
-| Camisa Social Malha | 60 | 0.07% |
-| Camiseta Fitness Manga Longa | 51 | 0.06% |
-| Jaqueta Essential | 45 | 0.05% |
-| Camiseta Gola Alta Manga Curta | 35 | 0.04% |
-| Camiseta Gola Alta Manga Longa | 34 | 0.04% |
-| Jaqueta Westfield | 34 | 0.04% |
-| Calça Essential | 32 | 0.04% |
-| Camiseta Modal Tech | 31 | 0.04% |
+| Produto                        | Clientes | % da entrada |
+| ------------------------------ | -------: | -----------: |
+| Camiseta Minimal **(entrada)** |   20.251 |       23.99% |
+| Calça Jeans 1.0                |    1.810 |        2.14% |
+| Camiseta Fitness               |    1.209 |        1.43% |
+| Cueca                          |    1.138 |        1.35% |
+| Outros Produtos                |      974 |        1.15% |
+| Camiseta Manga Longa           |      971 |        1.15% |
+| Carteira                       |      764 |        0.91% |
+| Camisa Social Tech Classics    |      722 |        0.86% |
+| Perfume                        |      624 |        0.74% |
+| Calça Alfaiataria              |      482 |        0.57% |
+| Polo 2.0                       |      447 |        0.53% |
+| Camisa Henley                  |      446 |        0.53% |
+| Calça Comfort                  |      394 |        0.47% |
+| Overshirt                      |      257 |        0.30% |
+| Calça Jeans 2.0                |      195 |        0.23% |
+| Cueca Fitness                  |      121 |        0.14% |
+| Suéter Zíper                   |      110 |        0.13% |
+| Suéter Classic 2026            |      102 |        0.12% |
+| Polo 1.0                       |       95 |        0.11% |
+| Polo Tricot                    |       93 |        0.11% |
+| Camisa Social Malha            |       60 |        0.07% |
+| Camiseta Fitness Manga Longa   |       51 |        0.06% |
+| Jaqueta Essential              |       45 |        0.05% |
+| Camiseta Gola Alta Manga Curta |       35 |        0.04% |
+| Camiseta Gola Alta Manga Longa |       34 |        0.04% |
+| Jaqueta Westfield              |       34 |        0.04% |
+| Calça Essential                |       32 |        0.04% |
+| Camiseta Modal Tech            |       31 |        0.04% |
 
 **3ª compra** — 11.438 chegaram (86.4% não voltaram). retenção 9.3% · mediana acumulada **330 dias**. intervalo desde a anterior **141 dias**
 
-| Produto | Clientes | % da entrada |
-|---|---:|---:|
-| Camiseta Minimal **(entrada)** | 7.835 | 9.28% |
-| Calça Jeans 1.0 | 1.002 | 1.19% |
-| Camiseta Fitness | 755 | 0.89% |
-| Outros Produtos | 589 | 0.70% |
-| Cueca | 562 | 0.67% |
-| Camiseta Manga Longa | 472 | 0.56% |
-| Camisa Social Tech Classics | 409 | 0.48% |
-| Carteira | 371 | 0.44% |
-| Perfume | 352 | 0.42% |
-| Calça Alfaiataria | 321 | 0.38% |
-| Camisa Henley | 270 | 0.32% |
-| Polo 2.0 | 258 | 0.31% |
-| Calça Comfort | 247 | 0.29% |
-| Overshirt | 191 | 0.23% |
-| Calça Jeans 2.0 | 114 | 0.14% |
-| Polo 1.0 | 77 | 0.09% |
-| Cueca Fitness | 76 | 0.09% |
-| Suéter Zíper | 75 | 0.09% |
-| Suéter Classic 2026 | 68 | 0.08% |
-| Polo Tricot | 62 | 0.07% |
-| Camisa Social Malha | 53 | 0.06% |
-| Jaqueta Essential | 45 | 0.05% |
-| Jaqueta Westfield | 31 | 0.04% |
-| Camiseta Modal Tech | 29 | 0.03% |
-| Camiseta Fitness Manga Longa | 28 | 0.03% |
-| Camiseta Gola Alta Manga Curta | 26 | 0.03% |
-| Calça Essential | 20 | 0.02% |
-| Camiseta Gola Alta Manga Longa | 19 | 0.02% |
+| Produto                        | Clientes | % da entrada |
+| ------------------------------ | -------: | -----------: |
+| Camiseta Minimal **(entrada)** |    7.835 |        9.28% |
+| Calça Jeans 1.0                |    1.002 |        1.19% |
+| Camiseta Fitness               |      755 |        0.89% |
+| Outros Produtos                |      589 |        0.70% |
+| Cueca                          |      562 |        0.67% |
+| Camiseta Manga Longa           |      472 |        0.56% |
+| Camisa Social Tech Classics    |      409 |        0.48% |
+| Carteira                       |      371 |        0.44% |
+| Perfume                        |      352 |        0.42% |
+| Calça Alfaiataria              |      321 |        0.38% |
+| Camisa Henley                  |      270 |        0.32% |
+| Polo 2.0                       |      258 |        0.31% |
+| Calça Comfort                  |      247 |        0.29% |
+| Overshirt                      |      191 |        0.23% |
+| Calça Jeans 2.0                |      114 |        0.14% |
+| Polo 1.0                       |       77 |        0.09% |
+| Cueca Fitness                  |       76 |        0.09% |
+| Suéter Zíper                   |       75 |        0.09% |
+| Suéter Classic 2026            |       68 |        0.08% |
+| Polo Tricot                    |       62 |        0.07% |
+| Camisa Social Malha            |       53 |        0.06% |
+| Jaqueta Essential              |       45 |        0.05% |
+| Jaqueta Westfield              |       31 |        0.04% |
+| Camiseta Modal Tech            |       29 |        0.03% |
+| Camiseta Fitness Manga Longa   |       28 |        0.03% |
+| Camiseta Gola Alta Manga Curta |       26 |        0.03% |
+| Calça Essential                |       20 |        0.02% |
+| Camiseta Gola Alta Manga Longa |       19 |        0.02% |
 
 **4ª compra** — 5.796 chegaram (93.1% não voltaram). retenção 4.3% · mediana acumulada **454 dias**. intervalo desde a anterior **118 dias**
 
-| Produto | Clientes | % da entrada |
-|---|---:|---:|
-| Camiseta Minimal **(entrada)** | 3.648 | 4.32% |
-| Calça Jeans 1.0 | 592 | 0.70% |
-| Camiseta Fitness | 440 | 0.52% |
-| Outros Produtos | 402 | 0.48% |
-| Cueca | 310 | 0.37% |
-| Camisa Social Tech Classics | 281 | 0.33% |
-| Camiseta Manga Longa | 235 | 0.28% |
-| Perfume | 225 | 0.27% |
-| Carteira | 201 | 0.24% |
-| Calça Alfaiataria | 194 | 0.23% |
-| Camisa Henley | 187 | 0.22% |
-| Polo 2.0 | 152 | 0.18% |
-| Calça Comfort | 149 | 0.18% |
-| Overshirt | 119 | 0.14% |
-| Calça Jeans 2.0 | 73 | 0.09% |
-| Suéter Zíper | 64 | 0.08% |
-| Polo Tricot | 59 | 0.07% |
-| Suéter Classic 2026 | 47 | 0.06% |
-| Cueca Fitness | 45 | 0.05% |
-| Polo 1.0 | 40 | 0.05% |
-| Jaqueta Essential | 33 | 0.04% |
-| Camisa Social Malha | 31 | 0.04% |
-| Camiseta Fitness Manga Longa | 28 | 0.03% |
-| Jaqueta Westfield | 21 | 0.02% |
-| Calça Essential | 21 | 0.02% |
-| Camiseta Gola Alta Manga Longa | 19 | 0.02% |
-| Camiseta Modal Tech | 17 | 0.02% |
-| Camiseta Gola Alta Manga Curta | 12 | 0.01% |
+| Produto                        | Clientes | % da entrada |
+| ------------------------------ | -------: | -----------: |
+| Camiseta Minimal **(entrada)** |    3.648 |        4.32% |
+| Calça Jeans 1.0                |      592 |        0.70% |
+| Camiseta Fitness               |      440 |        0.52% |
+| Outros Produtos                |      402 |        0.48% |
+| Cueca                          |      310 |        0.37% |
+| Camisa Social Tech Classics    |      281 |        0.33% |
+| Camiseta Manga Longa           |      235 |        0.28% |
+| Perfume                        |      225 |        0.27% |
+| Carteira                       |      201 |        0.24% |
+| Calça Alfaiataria              |      194 |        0.23% |
+| Camisa Henley                  |      187 |        0.22% |
+| Polo 2.0                       |      152 |        0.18% |
+| Calça Comfort                  |      149 |        0.18% |
+| Overshirt                      |      119 |        0.14% |
+| Calça Jeans 2.0                |       73 |        0.09% |
+| Suéter Zíper                   |       64 |        0.08% |
+| Polo Tricot                    |       59 |        0.07% |
+| Suéter Classic 2026            |       47 |        0.06% |
+| Cueca Fitness                  |       45 |        0.05% |
+| Polo 1.0                       |       40 |        0.05% |
+| Jaqueta Essential              |       33 |        0.04% |
+| Camisa Social Malha            |       31 |        0.04% |
+| Camiseta Fitness Manga Longa   |       28 |        0.03% |
+| Jaqueta Westfield              |       21 |        0.02% |
+| Calça Essential                |       21 |        0.02% |
+| Camiseta Gola Alta Manga Longa |       19 |        0.02% |
+| Camiseta Modal Tech            |       17 |        0.02% |
+| Camiseta Gola Alta Manga Curta |       12 |        0.01% |
 
 **5ª compra** — 3.180 chegaram (96.2% não voltaram). retenção 2.3% · mediana acumulada **554 dias**. intervalo desde a anterior **109 dias**
 
-| Produto | Clientes | % da entrada |
-|---|---:|---:|
-| Camiseta Minimal **(entrada)** | 1.918 | 2.27% |
-| Calça Jeans 1.0 | 334 | 0.40% |
-| Camiseta Fitness | 259 | 0.31% |
-| Outros Produtos | 241 | 0.29% |
-| Cueca | 170 | 0.20% |
-| Camiseta Manga Longa | 142 | 0.17% |
-| Camisa Social Tech Classics | 135 | 0.16% |
-| Calça Alfaiataria | 130 | 0.15% |
-| Perfume | 120 | 0.14% |
-| Carteira | 119 | 0.14% |
-| Camisa Henley | 99 | 0.12% |
-| Polo 2.0 | 99 | 0.12% |
-| Overshirt | 77 | 0.09% |
-| Calça Comfort | 76 | 0.09% |
-| Calça Jeans 2.0 | 44 | 0.05% |
-| Polo Tricot | 37 | 0.04% |
-| Suéter Zíper | 35 | 0.04% |
-| Polo 1.0 | 30 | 0.04% |
-| Cueca Fitness | 29 | 0.03% |
-| Suéter Classic 2026 | 28 | 0.03% |
-| Camisa Social Malha | 22 | 0.03% |
-| Jaqueta Essential | 21 | 0.02% |
-| Camiseta Fitness Manga Longa | 18 | 0.02% |
-| Camiseta Gola Alta Manga Longa | 13 | 0.02% |
-| Camiseta Gola Alta Manga Curta | 12 | 0.01% |
-| Calça Essential | 11 | 0.01% |
-| Jaqueta Westfield | 10 | 0.01% |
-| Camiseta Modal Tech | 9 | 0.01% |
+| Produto                        | Clientes | % da entrada |
+| ------------------------------ | -------: | -----------: |
+| Camiseta Minimal **(entrada)** |    1.918 |        2.27% |
+| Calça Jeans 1.0                |      334 |        0.40% |
+| Camiseta Fitness               |      259 |        0.31% |
+| Outros Produtos                |      241 |        0.29% |
+| Cueca                          |      170 |        0.20% |
+| Camiseta Manga Longa           |      142 |        0.17% |
+| Camisa Social Tech Classics    |      135 |        0.16% |
+| Calça Alfaiataria              |      130 |        0.15% |
+| Perfume                        |      120 |        0.14% |
+| Carteira                       |      119 |        0.14% |
+| Camisa Henley                  |       99 |        0.12% |
+| Polo 2.0                       |       99 |        0.12% |
+| Overshirt                      |       77 |        0.09% |
+| Calça Comfort                  |       76 |        0.09% |
+| Calça Jeans 2.0                |       44 |        0.05% |
+| Polo Tricot                    |       37 |        0.04% |
+| Suéter Zíper                   |       35 |        0.04% |
+| Polo 1.0                       |       30 |        0.04% |
+| Cueca Fitness                  |       29 |        0.03% |
+| Suéter Classic 2026            |       28 |        0.03% |
+| Camisa Social Malha            |       22 |        0.03% |
+| Jaqueta Essential              |       21 |        0.02% |
+| Camiseta Fitness Manga Longa   |       18 |        0.02% |
+| Camiseta Gola Alta Manga Longa |       13 |        0.02% |
+| Camiseta Gola Alta Manga Curta |       12 |        0.01% |
+| Calça Essential                |       11 |        0.01% |
+| Jaqueta Westfield              |       10 |        0.01% |
+| Camiseta Modal Tech            |        9 |        0.01% |
 
 
 ### Camiseta Minimal (1 un) — 60.803 clientes
