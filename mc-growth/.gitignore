@@ -37,6 +37,12 @@ hubspot_deals.csv
 # contém e-mail (dado pessoal). NÃO versionar. Ausência não derruba o painel (degrada p/ 30%).
 itens_historico.csv
 
+# Saída local da análise "Jornada de Produto" (jornada_produto.py) — reproduzível a partir
+# do código + das bases acima. sequencia_compras_detalhe.csv tem e_mail por linha (dado
+# pessoal) e o conjunto passa de 35 MB. NÃO versionar; os achados agregados (sem e-mail)
+# estão em docs/sessions/2026-07-23-jornada-de-produto.md.
+saida_local/
+
 # Configuração pessoal do Obsidian (não versionar)
 .obsidian/
 
